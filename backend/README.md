@@ -23,3 +23,12 @@ curl http://localhost:8000/api/health
 ```bash
 pytest
 ```
+
+## Phase 1 API
+
+```bash
+curl http://localhost:8000/api/companies
+curl http://localhost:8000/api/companies/1
+curl http://localhost:8000/api/companies/1/signals
+curl http://localhost:8000/api/companies/1/score
+```

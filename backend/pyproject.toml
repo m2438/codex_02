@@ -6,7 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.111.0",
   "uvicorn[standard]>=0.30.0",
-  "pydantic-settings>=2.3.0"
+  "pydantic-settings>=2.3.0",
+  "sqlalchemy>=2.0.30"
 ]
 
 [project.optional-dependencies]

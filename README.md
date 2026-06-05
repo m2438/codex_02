@@ -81,6 +81,28 @@ curl http://localhost:8000/api/config
 | `OPENAI_API_KEY` | OpenAI API キー。未設定時はモックモード | 空 |
 | `NEXT_PUBLIC_API_BASE_URL` | フロントエンドから参照する API ベース URL | `http://localhost:8000/api` |
 
+
+## Phase 1 API 検証
+
+Phase 1 では SQLite、SQLAlchemy モデル、20社分の合成サンプルデータ、企業一覧・企業詳細・CREシグナル・営業優先度スコア API を追加しています。
+
+依存関係をインストールできるローカル環境では、以下で Phase 1 の API 契約を検証します。
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+主な確認対象は以下です。
+
+- `GET /api/companies` が20社のサンプル企業を返し、`company_id`、`name`、`industry`、`total_score`、`priority_label`、`signal_count` を含むこと。
+- `GET /api/companies/{company_id}` が企業プロフィール、最新財務指標、CREシグナル、スコア内訳を返すこと。
+- `GET /api/companies/{company_id}/signals` の全シグナルに `evidence_text` と `source_reference` が含まれること。
+- `GET /api/companies/{company_id}/score` が `total_score` と `component_scores` を返すこと。
+
+Codex cloud で Python / npm パッケージ取得が 403 になる場合は、依存関係インストールを必要としない構文チェックを実行し、pytest / Next.js build はローカルで確認してください。Docker Compose コマンドも Codex cloud の必須チェックではなく、ローカル検証専用です。
+
 ## Phase 0 デモシナリオ
 
 1. `docker compose up --build` でローカル起動します。
