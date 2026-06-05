@@ -32,6 +32,45 @@ docker compose up --build
 - フロントエンド: <http://localhost:3000>
 - バックエンドヘルスチェック: <http://localhost:8000/api/health>
 
+
+## ローカル検証コマンド
+
+### バックエンド
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -B -m py_compile app/__init__.py app/config.py app/main.py
+pytest
+```
+
+### フロントエンド
+
+```bash
+cd frontend
+npm install
+npm run typecheck
+npm run build
+```
+
+### Docker 検証（ローカルのみ）
+
+Codex cloud では Docker Compose コマンドを必須チェックとして扱いません。Docker 検証は、Docker が利用できるローカル環境でのみ実行してください。
+
+```bash
+docker compose config
+docker compose up --build
+```
+
+起動後、別ターミナルまたはブラウザで以下を確認します。
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/api/config
+```
+
 ## 環境変数
 
 | 変数名 | 用途 | デフォルト |
