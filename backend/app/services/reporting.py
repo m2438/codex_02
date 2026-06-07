@@ -61,7 +61,7 @@ def generate_company_report(
     structured_report = {
         "title": title,
         "disclaimer": "本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。",
-        "sections": [{**section, "items": _plain_items(str(section["body"]))} for section in sections],
+        "sections": [{**section, "items": _plain_items(str(section["body"]))} for section in sorted(sections, key=lambda section: int(section["number"]))],
         "score_components": _structured_score_components(score=latest_score, signals=signals, metric=latest_metric),
         "documents": [_document_payload(document) for document in documents],
         "signals": [_signal_payload(signal) for signal in signals],
@@ -113,7 +113,7 @@ def _priority_section(*, score: Score | None) -> str:
             "- 判定閾値: 高=85点以上、中=50点以上85点未満、低=50点未満",
             f"- 全体評点理由: {score.explanation}",
             f"- 推奨アクション: {score.recommended_action}",
-            "- 実在企業デモの場合: 公開情報から読み取れる事実、CRE観点での仮説、追加確認事項を分けて扱います。",
+            "- 公開情報ベースの分析では、開示資料から読み取れる事実、CRE観点での仮説、追加確認事項を分けて扱います。",
         ]
     )
 
@@ -181,24 +181,66 @@ def _signal_payload(signal: CRESignal) -> dict[str, object]:
 def _structured_score_components(*, score: Score | None, signals: list[CRESignal], metric: FinancialMetric | None) -> list[dict[str, object]]:
     if score is None:
         return []
-    body = _score_detail_section(score=score, signals=signals, metric=metric)
-    components: list[dict[str, object]] = []
-    current: dict[str, object] | None = None
-    for line in body.splitlines():
-        if line.startswith("- **") and "**:" in line:
-            if current:
-                components.append(current)
-            label = line.split("**", 2)[1]
-            if label == "合計":
-                current = None
-                continue
-            score_text = line.split(":", 1)[1].strip()
-            current = {"label": label, "score_text": score_text, "details": []}
-        elif current and line.strip().startswith("- "):
-            current["details"].append(line.strip()[2:])
-    if current:
-        components.append(current)
-    return components
+
+    signal_types = "、".join(dict.fromkeys(signal.signal_type for signal in signals)) or "該当なし"
+    high_signals = "、".join(dict.fromkeys(signal.signal_type for signal in signals if signal.confidence == "high")) or "該当なし"
+    financial_context = "財務指標は未登録です。"
+    if metric is not None:
+        financial_context = (
+            f"FY{metric.fiscal_year}の売上成長率{metric.revenue_growth_pct:.1f}%、営業利益率{metric.operating_margin_pct:.1f}%、"
+            f"設備投資額{format_million_yen_to_oku(metric.capex_amount)}、現預金等{format_million_yen_to_oku(metric.cash_and_equivalents)}。"
+        )
+
+    return [
+        {
+            "label": "CRE関連シグナル",
+            "evaluation_target": f"登録済みCREシグナル（{signal_types}）と各シグナルの根拠文",
+            "evaluation_viewpoint": "拠点再編、工場・研究所・物流拠点、設備投資、老朽化・更新、BCP、脱炭素、省エネ、働き方などが公開資料上で具体的に確認できるか。",
+            "rationale": f"高信頼シグナルは{high_signals}です。公開IR資料の根拠文から、CRE観点で追加確認すべき拠点・投資・施設運営テーマの幅と具体性を評価しました。",
+            "score_text": f"{score.signal_score}/35",
+            "details": [
+                f"評価対象: 登録済みCREシグナル（{signal_types}）と各シグナルの根拠文。",
+                "評価観点: 拠点再編、工場・研究所・物流拠点、設備投資、老朽化・更新、BCP、脱炭素、省エネ、働き方などが公開資料上で具体的に確認できるか。",
+                f"根拠・判断理由: 高信頼シグナルは{high_signals}です。公開IR資料の根拠文から、CRE観点で追加確認すべき拠点・投資・施設運営テーマの幅と具体性を評価しました。",
+            ],
+        },
+        {
+            "label": "財務・投資余力",
+            "evaluation_target": "売上高、売上成長率、営業利益率、設備投資額、現預金等",
+            "evaluation_viewpoint": "大型投資・施設更新・拠点再配置を検討し得る事業規模と投資余力が、公開資料上の数値と整合するか。",
+            "rationale": f"{financial_context} 財務数値は提案機会の断定ではなく、投資前レビュー、PM/CM、更新投資ロードマップの検討余地を測る補助指標として扱いました。",
+            "score_text": f"{score.financial_score}/25",
+            "details": [
+                "評価対象: 売上高、売上成長率、営業利益率、設備投資額、現預金等。",
+                "評価観点: 大型投資・施設更新・拠点再配置を検討し得る事業規模と投資余力が、公開資料上の数値と整合するか。",
+                f"根拠・判断理由: {financial_context} 財務数値は提案機会の断定ではなく、投資前レビュー、PM/CM、更新投資ロードマップの検討余地を測る補助指標として扱いました。",
+            ],
+        },
+        {
+            "label": "戦略イベント",
+            "evaluation_target": f"{signal_types}のうち、中期施策、構造改革、資本効率、事業ポートフォリオ、拠点投資に接続しやすいテーマ",
+            "evaluation_viewpoint": "公開資料上の経営課題とCRE論点が、同じ経営文脈で説明できるか。",
+            "rationale": "設備投資、脱炭素、BCP、構造改革などが確認できる場合、施設・不動産を単体ではなく経営施策の実行基盤として検討する余地があると評価しました。",
+            "score_text": f"{score.strategic_event_score}/25",
+            "details": [
+                f"評価対象: {signal_types}のうち、中期施策、構造改革、資本効率、事業ポートフォリオ、拠点投資に接続しやすいテーマ。",
+                "評価観点: 公開資料上の経営課題とCRE論点が、同じ経営文脈で説明できるか。",
+                "根拠・判断理由: 設備投資、脱炭素、BCP、構造改革などが確認できる場合、施設・不動産を単体ではなく経営施策の実行基盤として検討する余地があると評価しました。",
+            ],
+        },
+        {
+            "label": "提案適合度",
+            "evaluation_target": "CRE戦略、PM/CM、拠点ポートフォリオ診断、遊休資産活用、省エネ改修、ワークプレイス改革などへの接続性",
+            "evaluation_viewpoint": "初回面談で根拠資料を示しながら、過度に断定せず確認質問として提示できるテーマか。",
+            "rationale": "シグナルと財務・投資余力が同時に確認できるテーマは、公開情報ベースの仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
+            "score_text": f"{score.fit_score}/15",
+            "details": [
+                "評価対象: CRE戦略、PM/CM、拠点ポートフォリオ診断、遊休資産活用、省エネ改修、ワークプレイス改革などへの接続性。",
+                "評価観点: 初回面談で根拠資料を示しながら、過度に断定せず確認質問として提示できるテーマか。",
+                "根拠・判断理由: シグナルと財務・投資余力が同時に確認できるテーマは、公開情報ベースの仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
+            ],
+        },
+    ]
 
 
 def _signals_section(*, signals: list[CRESignal], documents: list[Document]) -> str:

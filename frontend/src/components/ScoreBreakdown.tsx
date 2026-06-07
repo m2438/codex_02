@@ -46,7 +46,6 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
           const detail = score.component_details?.[key];
           const value = detail?.score ?? score.component_scores[key];
           const maxPoints = detail?.max_points ?? fallbackMaxPoints[key];
-          const reason = detail?.reason ?? `${scoreLabels[key]}について、公開資料の根拠と財務・戦略テーマの接続性を評価しています。`;
           return (
             <div className="score-bar" key={key}>
               <div className="score-bar__label-row">
@@ -56,7 +55,6 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
               <div className="score-bar__track" aria-hidden="true">
                 <span style={{ width: `${Math.min(value, maxPoints) / maxPoints * 100}%` }} />
               </div>
-              <p className="score-bar__reason">{reason}</p>
             </div>
           );
         })}

@@ -1,6 +1,6 @@
 # Frontend
 
-CRE Sales Intelligence の Next.js フロントエンドです。
+CRE営業支援BI の Next.js フロントエンドです。
 
 ## ローカル実行
 
