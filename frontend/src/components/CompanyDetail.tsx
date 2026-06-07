@@ -1,4 +1,4 @@
-import type { CompanyDetailResponse } from '@/types/api';
+import type { CompanyDetailResponse, CompanyReportResponse } from '@/types/api';
 import { SignalCard } from './SignalCard';
 import { ScoreBreakdown } from './ScoreBreakdown';
 
@@ -8,11 +8,20 @@ function formatYenMillions(value: number): string {
   return `${numberFormatter.format(value)}百万円`;
 }
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Tokyo'
+  }).format(new Date(value));
+}
+
 type CompanyDetailProps = {
   detail: CompanyDetailResponse | null;
+  report: CompanyReportResponse | null;
 };
 
-export function CompanyDetail({ detail }: CompanyDetailProps) {
+export function CompanyDetail({ detail, report }: CompanyDetailProps) {
   if (!detail) {
     return (
       <section className="panel detail-panel">
@@ -65,6 +74,40 @@ export function CompanyDetail({ detail }: CompanyDetailProps) {
         <div className="panel">
           <ScoreBreakdown score={score} />
         </div>
+      </div>
+
+
+      <div className="panel report-panel">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Markdownレポート</p>
+            <h3>企業別CRE営業仮説レポート</h3>
+          </div>
+          <span className={`pill report-status report-status--${report?.generation_status ?? 'not_generated'}`}>
+            {report?.generation_status === 'generated' ? '生成済み' : '未生成'}
+          </span>
+        </div>
+        {report ? (
+          <div className="report-content">
+            <div className="report-preview">
+              <p className="report-preview__label">レポートプレビュー</p>
+              <p>{report.preview}</p>
+              <dl>
+                <div>
+                  <dt>生成日時</dt>
+                  <dd>{formatDateTime(report.generated_at)}</dd>
+                </div>
+                <div>
+                  <dt>根拠シグナル数</dt>
+                  <dd>{report.signal_count}件</dd>
+                </div>
+              </dl>
+            </div>
+            <pre className="markdown-report">{report.markdown_content}</pre>
+          </div>
+        ) : (
+          <p className="empty-state">レポートはまだ生成されていません。バックエンドのレポートAPI接続状態を確認してください。</p>
+        )}
       </div>
 
       <div className="panel">

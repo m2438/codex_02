@@ -1,8 +1,8 @@
 import { CompanyDetail } from '@/components/CompanyDetail';
 import { CompanyRankTable } from '@/components/CompanyRankTable';
 import { MetricCard } from '@/components/MetricCard';
-import { getCompanies, getCompanyDetail, getHealth } from '@/lib/api';
-import type { CompanyDetailResponse, CompanySummary, PriorityLabel } from '@/types/api';
+import { getCompanies, getCompanyDetail, getCompanyReport, getHealth } from '@/lib/api';
+import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, PriorityLabel } from '@/types/api';
 
 const priorityOrder: Record<string, number> = { 高: 3, 中: 2, 低: 1, 未評価: 0 };
 const priorityOptions: Array<PriorityLabel | 'すべて'> = ['すべて', '高', '中', '低'];
@@ -54,8 +54,13 @@ export default async function Home({ searchParams }: HomeProps) {
     return industryMatches && priorityMatches;
   });
   const selectedCompany = filteredCompanies.find((company) => company.company_id === selectedCompanyIdParam) ?? filteredCompanies[0];
-  const [selectedDetail, latestUpdatedAt]: [CompanyDetailResponse | null, string | undefined] = await Promise.all([
+  const [selectedDetail, selectedReport, latestUpdatedAt]: [
+    CompanyDetailResponse | null,
+    CompanyReportResponse | null,
+    string | undefined
+  ] = await Promise.all([
     selectedCompany ? getCompanyDetail(selectedCompany.company_id) : Promise.resolve(null),
+    selectedCompany ? getCompanyReport(selectedCompany.company_id) : Promise.resolve(null),
     getLatestUpdatedAt(companies)
   ]);
 
@@ -115,7 +120,7 @@ export default async function Home({ searchParams }: HomeProps) {
           />
         </section>
 
-        <CompanyDetail detail={selectedDetail} />
+        <CompanyDetail detail={selectedDetail} report={selectedReport} />
       </div>
     </main>
   );

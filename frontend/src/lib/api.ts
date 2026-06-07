@@ -1,4 +1,4 @@
-import type { CompaniesResponse, CompanyDetailResponse, HealthResponse } from '@/types/api';
+import type { CompaniesResponse, CompanyDetailResponse, CompanyReportResponse, HealthResponse } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api';
 
@@ -28,4 +28,8 @@ export async function getCompanies(): Promise<CompaniesResponse | null> {
 
 export async function getCompanyDetail(companyId: number): Promise<CompanyDetailResponse | null> {
   return fetchJson<CompanyDetailResponse>(`/companies/${companyId}`);
+}
+
+export async function getCompanyReport(companyId: number): Promise<CompanyReportResponse | null> {
+  return fetchJson<CompanyReportResponse>(`/companies/${companyId}/report`);
 }

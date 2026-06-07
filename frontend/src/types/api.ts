@@ -90,3 +90,14 @@ export type CompanyDetailResponse = {
   score_breakdown: ScoreBreakdownResponse | null;
   documents: DocumentSummary[];
 };
+
+export type CompanyReportResponse = {
+  company_id: number;
+  title: string;
+  generation_status: 'generated' | 'failed' | 'not_generated';
+  generated_at: string;
+  generated_by: string;
+  signal_count: number;
+  preview: string;
+  markdown_content: string;
+};
