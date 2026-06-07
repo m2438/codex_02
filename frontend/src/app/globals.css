@@ -412,6 +412,13 @@ h4 {
   letter-spacing: -0.05em;
 }
 
+.score-breakdown__total span {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
 .score-bars {
   display: grid;
   gap: 13px;
@@ -437,6 +444,13 @@ h4 {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-dark));
   border-radius: inherit;
+}
+
+.score-bar__reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .recommendation-box p:last-child,
@@ -630,4 +644,78 @@ h4 {
   font-size: 13px;
   line-height: 1.75;
   white-space: pre-wrap;
+}
+
+.data-source-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.data-source-badge--public_demo {
+  color: #075985;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+}
+
+.data-source-badge--synthetic {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.caution-panel {
+  display: grid;
+  gap: 8px;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.caution-panel p {
+  margin-bottom: 0;
+  color: #7c2d12;
+  line-height: 1.7;
+}
+
+.documents-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.document-list {
+  display: grid;
+  gap: 12px;
+}
+
+.document-card {
+  padding: 14px;
+  background: var(--soft-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.document-card h4 {
+  margin-bottom: 6px;
+}
+
+.document-card p {
+  margin-bottom: 8px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.document-card a {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.document-card__note {
+  margin-top: 8px;
+  font-size: 13px;
 }

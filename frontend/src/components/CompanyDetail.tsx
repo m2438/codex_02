@@ -4,8 +4,16 @@ import { ScoreBreakdown } from './ScoreBreakdown';
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 
-function formatYenMillions(value: number): string {
-  return `${numberFormatter.format(value)}百万円`;
+function dataSourceLabel(value: 'synthetic' | 'public_demo'): string {
+  return value === 'public_demo' ? '公開情報ベース' : '合成デモデータ';
+}
+
+function formatMillionYenToOku(value: number): string {
+  const oku = value / 100;
+  if (oku >= 10000) {
+    return `${(oku / 10000).toFixed(1)}兆円`;
+  }
+  return `${numberFormatter.format(Math.round(oku))}億円`;
 }
 
 function formatDateTime(value: string): string {
@@ -39,13 +47,22 @@ export function CompanyDetail({ detail, report }: CompanyDetailProps) {
           <p className="section-kicker">企業詳細</p>
           <h2>{company.name}</h2>
           <p className="detail-panel__subtitle">{company.ticker} / {company.market} / {company.industry}</p>
+          <span className={`data-source-badge data-source-badge--${company.data_source_type}`}>{dataSourceLabel(company.data_source_type)}</span>
         </div>
         <div className="profile-grid">
           <div><span>本社</span><strong>{company.headquarters_location}</strong></div>
           <div><span>従業員数</span><strong>{numberFormatter.format(company.employee_count)}人</strong></div>
-          <div><span>売上高（{company.fiscal_year}）</span><strong>{formatYenMillions(company.revenue)}</strong></div>
+          <div><span>売上高（{company.fiscal_year}）</span><strong>{formatMillionYenToOku(company.revenue)}</strong></div>
         </div>
       </div>
+
+      {company.data_source_type === 'public_demo' ? (
+        <div className="panel caution-panel">
+          <strong>公開情報ベースの営業仮説に関する注意</strong>
+          <p>本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。</p>
+          <p>実営業に使用する場合は、一次情報の再確認および個別ヒアリングによる検証が必要です。</p>
+        </div>
+      ) : null}
 
       <div className="detail-grid">
         <div className="panel">
@@ -61,8 +78,8 @@ export function CompanyDetail({ detail, report }: CompanyDetailProps) {
               <div className="financial-grid">
                 <div><span>売上成長率</span><strong>{metrics.revenue_growth_pct.toFixed(1)}%</strong></div>
                 <div><span>営業利益率</span><strong>{metrics.operating_margin_pct.toFixed(1)}%</strong></div>
-                <div><span>設備投資額</span><strong>{formatYenMillions(metrics.capex_amount)}</strong></div>
-                <div><span>現預金等</span><strong>{formatYenMillions(metrics.cash_and_equivalents)}</strong></div>
+                <div><span>設備投資額</span><strong>{formatMillionYenToOku(metrics.capex_amount)}</strong></div>
+                <div><span>現預金等</span><strong>{formatMillionYenToOku(metrics.cash_and_equivalents)}</strong></div>
               </div>
               <p className="note-box">{metrics.segment_change_note}</p>
             </>
@@ -73,6 +90,27 @@ export function CompanyDetail({ detail, report }: CompanyDetailProps) {
 
         <div className="panel">
           <ScoreBreakdown score={score} />
+        </div>
+      </div>
+
+
+      <div className="panel documents-panel">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">根拠資料</p>
+            <h3>参照IR資料・出典URL</h3>
+          </div>
+          <span className="pill">{detail.documents.length}件</span>
+        </div>
+        <div className="document-list">
+          {detail.documents.map((document) => (
+            <article className="document-card" key={document.document_id}>
+              <h4>{document.document_title ?? document.title}</h4>
+              <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name}</p>
+              {document.source_url ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : <span>URLなし</span>}
+              {document.source_note ? <p className="document-card__note">{document.source_note}</p> : null}
+            </article>
+          ))}
         </div>
       </div>
 

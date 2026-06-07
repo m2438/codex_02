@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import type { CompanySummary, PriorityLabel } from '@/types/api';
+import type { CompanySummary, DataSourceType, PriorityLabel } from '@/types/api';
 
 type CompanyRankTableProps = {
   companies: CompanySummary[];
   selectedCompanyId?: number;
   industry?: string;
   priority?: PriorityLabel | 'すべて';
+  dataSource?: DataSourceType | 'すべて';
 };
 
 function formatScore(score: number | null): string {
@@ -19,7 +20,11 @@ function priorityClass(priority: PriorityLabel): string {
   return 'priority--none';
 }
 
-export function CompanyRankTable({ companies, selectedCompanyId, industry, priority }: CompanyRankTableProps) {
+function dataSourceLabel(dataSource: DataSourceType): string {
+  return dataSource === 'public_demo' ? '公開情報ベース' : '合成デモ';
+}
+
+export function CompanyRankTable({ companies, selectedCompanyId, industry, priority, dataSource }: CompanyRankTableProps) {
   if (companies.length === 0) {
     return <p className="empty-state">条件に一致する企業がありません。フィルター条件を変更してください。</p>;
   }
@@ -44,6 +49,7 @@ export function CompanyRankTable({ companies, selectedCompanyId, industry, prior
             params.set('companyId', String(company.company_id));
             if (industry) params.set('industry', industry);
             if (priority && priority !== 'すべて') params.set('priority', priority);
+            if (dataSource && dataSource !== 'すべて') params.set('dataSource', dataSource);
 
             return (
               <tr className={company.company_id === selectedCompanyId ? 'is-selected' : undefined} key={company.company_id}>
@@ -52,6 +58,7 @@ export function CompanyRankTable({ companies, selectedCompanyId, industry, prior
                   <Link className="company-link" href={`/?${params.toString()}`}>
                     <strong>{company.name}</strong>
                     <span>{company.ticker}</span>
+                    <em className={`data-source-badge data-source-badge--${company.data_source_type}`}>{dataSourceLabel(company.data_source_type)}</em>
                   </Link>
                 </td>
                 <td>{company.industry}</td>

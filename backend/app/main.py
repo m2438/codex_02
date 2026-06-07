@@ -10,6 +10,7 @@ from app.database import Base, engine, get_db
 from app.models import CRESignal, Company, FinancialMetric, Report, Score
 from app.seed import seed_database
 from app.services.reporting import CompanyReportResult, generate_company_report
+from app.services.scoring import build_component_details
 
 settings = get_settings()
 
@@ -49,14 +50,20 @@ def latest_financial_metric(company: Company) -> FinancialMetric | None:
 def score_response(score: Score | None) -> dict[str, object] | None:
     if score is None:
         return None
+    component_scores = {
+        "signal_score": score.signal_score,
+        "financial_score": score.financial_score,
+        "strategic_event_score": score.strategic_event_score,
+        "fit_score": score.fit_score,
+    }
+    component_details = build_component_details(component_scores=component_scores)
     return {
         "total_score": score.total_score,
         "priority_label": score.priority_label,
-        "component_scores": {
-            "signal_score": score.signal_score,
-            "financial_score": score.financial_score,
-            "strategic_event_score": score.strategic_event_score,
-            "fit_score": score.fit_score,
+        "component_scores": component_scores,
+        "component_details": {
+            key: {"score": detail.score, "max_points": detail.max_points, "reason": detail.reason}
+            for key, detail in component_details.items()
         },
         "explanation": score.explanation,
         "recommended_action": score.recommended_action,
@@ -134,6 +141,8 @@ def list_companies(db: Session = Depends(get_db)) -> dict[str, object]:
                 "name": company.name,
                 "industry": company.industry,
                 "market": company.market,
+                "data_source_type": company.data_source_type,
+                "selection_reason": company.selection_reason,
                 "total_score": score.total_score if score else None,
                 "priority_label": score.priority_label if score else "未評価",
                 "signal_count": len(company.cre_signals),
@@ -171,6 +180,10 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
             "employee_count": company.employee_count,
             "revenue": company.revenue,
             "fiscal_year": company.fiscal_year,
+            "data_source_type": company.data_source_type,
+            "listing_country": company.listing_country,
+            "is_public_company": company.is_public_company,
+            "selection_reason": company.selection_reason,
         },
         "latest_financial_metrics": None
         if metric is None
@@ -190,7 +203,11 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
                 "document_id": document.id,
                 "document_type": document.document_type,
                 "title": document.title,
+                "document_title": document.title,
                 "source_name": document.source_name,
+                "source_url": document.source_url,
+                "source_note": document.source_note,
+                "retrieved_at": document.retrieved_at.isoformat() if document.retrieved_at else None,
                 "published_date": document.published_date.isoformat() if document.published_date else None,
                 "fiscal_year": document.fiscal_year,
                 "is_sample": document.is_sample,

@@ -1,4 +1,5 @@
 export type PriorityLabel = '高' | '中' | '低' | '未評価';
+export type DataSourceType = 'synthetic' | 'public_demo';
 export type ConfidenceLabel = 'high' | 'medium' | 'low';
 
 export type HealthResponse = {
@@ -14,6 +15,8 @@ export type CompanySummary = {
   name: string;
   industry: string;
   market: string;
+  data_source_type: DataSourceType;
+  selection_reason: string;
   total_score: number | null;
   priority_label: PriorityLabel;
   signal_count: number;
@@ -34,6 +37,10 @@ export type CompanyProfile = {
   employee_count: number;
   revenue: number;
   fiscal_year: string;
+  data_source_type: DataSourceType;
+  listing_country: string;
+  is_public_company: boolean;
+  selection_reason: string;
 };
 
 export type FinancialMetrics = {
@@ -59,15 +66,19 @@ export type CRESignal = {
   extracted_by: string;
 };
 
+export type ScoreComponentKey = 'signal_score' | 'financial_score' | 'strategic_event_score' | 'fit_score';
+
+export type ScoreComponentDetail = {
+  score: number;
+  max_points: number;
+  reason: string;
+};
+
 export type ScoreBreakdownResponse = {
   total_score: number;
   priority_label: PriorityLabel;
-  component_scores: {
-    signal_score: number;
-    financial_score: number;
-    strategic_event_score: number;
-    fit_score: number;
-  };
+  component_scores: Record<ScoreComponentKey, number>;
+  component_details: Record<ScoreComponentKey, ScoreComponentDetail>;
   explanation: string;
   recommended_action: string;
   calculated_at: string;
@@ -77,7 +88,11 @@ export type DocumentSummary = {
   document_id: number;
   document_type: string;
   title: string;
+  document_title: string;
   source_name: string;
+  source_url: string | null;
+  source_note: string;
+  retrieved_at: string | null;
   published_date: string | null;
   fiscal_year: string;
   is_sample: boolean;
