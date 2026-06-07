@@ -2,15 +2,10 @@ import { CompanyDetail } from '@/components/CompanyDetail';
 import { CompanyRankTable } from '@/components/CompanyRankTable';
 import { MetricCard } from '@/components/MetricCard';
 import { getCompanies, getCompanyDetail, getCompanyReport, getHealth } from '@/lib/api';
-import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, DataSourceType, PriorityLabel } from '@/types/api';
+import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, DataSourceType, FinancialMetricScales, PriorityLabel } from '@/types/api';
 
 const priorityOrder: Record<string, number> = { 高: 3, 中: 2, 低: 1, 未評価: 0 };
 const priorityOptions: Array<PriorityLabel | 'すべて'> = ['すべて', '高', '中', '低'];
-const dataSourceOptions: Array<{ value: DataSourceType | 'すべて'; label: string }> = [
-  { value: 'すべて', label: 'すべて' },
-  { value: 'public_demo', label: '実在企業デモデータ' }
-];
-
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -32,12 +27,30 @@ function sortCompanies(companies: CompanySummary[]): CompanySummary[] {
   });
 }
 
-async function getLatestUpdatedAt(companies: CompanySummary[]): Promise<string | undefined> {
-  const details = await Promise.all(companies.map((company) => getCompanyDetail(company.company_id)));
+function latestUpdatedAt(details: CompanyDetailResponse[]): string | undefined {
   return details
-    .map((detail) => detail?.score_breakdown?.calculated_at)
+    .map((detail) => detail.score_breakdown?.calculated_at)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+}
+
+function roundedCeil(value: number, step: number): number {
+  return Math.max(step, Math.ceil(value / step) * step);
+}
+
+function buildFinancialScales(details: CompanyDetailResponse[]): FinancialMetricScales {
+  const metrics = details.map((detail) => detail.latest_financial_metrics).filter((metric): metric is NonNullable<typeof metric> => Boolean(metric));
+  const maxMargin = Math.max(20, ...metrics.map((metric) => metric.operating_margin_pct));
+  const maxCapexOku = Math.max(1000, ...metrics.map((metric) => metric.capex_amount / 100));
+  const maxCashOku = Math.max(10000, ...metrics.map((metric) => metric.cash_and_equivalents / 100));
+
+  return {
+    growthMinPct: -10,
+    growthMaxPct: 20,
+    marginMaxPct: roundedCeil(maxMargin, 5),
+    capexMaxOku: roundedCeil(maxCapexOku, 1000),
+    cashMaxOku: roundedCeil(maxCashOku, 5000)
+  };
 }
 
 type HomeProps = {
@@ -60,41 +73,37 @@ export default async function Home({ searchParams }: HomeProps) {
     return industryMatches && priorityMatches && dataSourceMatches;
   });
   const selectedCompany = filteredCompanies.find((company) => company.company_id === selectedCompanyIdParam) ?? filteredCompanies[0];
-  const [selectedDetail, selectedReport, latestUpdatedAt]: [
-    CompanyDetailResponse | null,
-    CompanyReportResponse | null,
-    string | undefined
-  ] = await Promise.all([
-    selectedCompany ? getCompanyDetail(selectedCompany.company_id) : Promise.resolve(null),
-    selectedCompany ? getCompanyReport(selectedCompany.company_id) : Promise.resolve(null),
-    getLatestUpdatedAt(companies)
+  const allDetails = (await Promise.all(companies.map((company) => getCompanyDetail(company.company_id)))).filter(
+    (detail): detail is CompanyDetailResponse => Boolean(detail)
+  );
+  const selectedDetail = allDetails.find((detail) => detail.company.company_id === selectedCompany?.company_id) ?? null;
+  const [selectedReport]: [CompanyReportResponse | null] = await Promise.all([
+    selectedCompany ? getCompanyReport(selectedCompany.company_id) : Promise.resolve(null)
   ]);
 
-  const highPriorityCount = companies.filter((company) => company.priority_label === '高').length;
-  const publicDemoCount = companies.filter((company) => company.data_source_type === 'public_demo').length;
   const modeLabel = health?.mode === 'openai' ? 'OpenAI APIモード' : 'モックモード';
+  const financialScales = buildFinancialScales(allDetails);
 
   return (
     <main>
       <div className="container dashboard">
         <section className="hero dashboard-hero">
           <div>
-            <p className="eyebrow">CRE CONSULTING SALES DEMO</p>
-            <h1>CRE Sales Intelligence Dashboard</h1>
+            <p className="eyebrow">CRE CONSULTING SALES BI</p>
+            <h1>CRE営業支援BI</h1>
             <p className="description">
-              日本国内の実在上場企業10社について、日本語の公開IR資料に基づくCRE営業仮説、スコアリング理由、根拠資料を確認するダッシュボードです。
+              日本国内の上場企業について、日本語の公開IR資料に基づくCRE営業仮説、スコアリング理由、根拠資料を確認する営業支援ダッシュボードです。
             </p>
           </div>
           <div className="hero-status">
-            <span className="badge">Phase 4A: 実在企業デモ対応</span>
+            <span className="badge">公開情報ベース分析</span>
             <span className="connection">バックエンド: {health?.status === 'ok' ? '接続済み' : '未接続'} / {modeLabel}</span>
           </div>
         </section>
 
-        <section className="metric-grid" aria-label="ダッシュボード指標">
-          <MetricCard label="対象企業数" value={`${companiesResponse?.total ?? 0}社`} helper="公開情報ベース10社" tone="primary" />
-          <MetricCard label="実在企業デモ" value={`${publicDemoCount}社`} helper="公開IR資料に基づく営業仮説" tone="success" />
-          <MetricCard label="最新更新" value={formatDateTime(latestUpdatedAt)} helper="スコア計算時刻（JST）" />
+        <section className="metric-grid metric-grid--compact" aria-label="ダッシュボード指標">
+          <MetricCard label="対象企業数" value={`${companiesResponse?.total ?? 0}社`} helper="現在のランキング対象" tone="primary" />
+          <MetricCard label="最新更新" value={formatDateTime(latestUpdatedAt(allDetails))} helper="スコア計算時刻（JST）" />
         </section>
 
         <section className="panel">
@@ -102,6 +111,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <div>
               <p className="section-kicker">企業ランキング</p>
               <h2>営業優先度順のターゲットリスト</h2>
+              <p className="result-count">表示中: {filteredCompanies.length}社</p>
             </div>
             <form className="filters">
               <label>
@@ -116,12 +126,6 @@ export default async function Home({ searchParams }: HomeProps) {
                   {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
                 </select>
               </label>
-              <label>
-                データ種別
-                <select name="dataSource" defaultValue={selectedDataSource}>
-                  {dataSourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
               <button type="submit">絞り込み</button>
             </form>
           </div>
@@ -134,7 +138,7 @@ export default async function Home({ searchParams }: HomeProps) {
           />
         </section>
 
-        <CompanyDetail detail={selectedDetail} report={selectedReport} />
+        <CompanyDetail detail={selectedDetail} report={selectedReport} financialScales={financialScales} />
       </div>
     </main>
   );

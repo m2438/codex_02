@@ -43,6 +43,14 @@ export type CompanyProfile = {
   selection_reason: string;
 };
 
+export type FinancialMetricScales = {
+  growthMinPct: number;
+  growthMaxPct: number;
+  marginMaxPct: number;
+  capexMaxOku: number;
+  cashMaxOku: number;
+};
+
 export type FinancialMetrics = {
   fiscal_year: string;
   revenue_growth_pct: number;
@@ -117,6 +125,9 @@ export type StructuredReportSection = {
 
 export type StructuredScoreComponent = {
   label: string;
+  evaluation_target: string;
+  evaluation_viewpoint: string;
+  rationale: string;
   score_text: string;
   details: string[];
 };

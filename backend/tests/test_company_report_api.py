@@ -55,3 +55,42 @@ def test_public_demo_company_report_includes_public_information_caveat() -> None
     strategic_section = next(section for section in payload["structured_report"]["sections"] if section["id"] == "strategic_connection")
     assert all(not item.startswith(f"{company_name}:") for item in strategic_section["items"])
     assert "追加検証" in payload["markdown_content"] or "追加確認" in payload["markdown_content"]
+
+
+def test_structured_report_sections_and_score_table_shape() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/companies/1/report")
+
+    assert response.status_code == 200
+    structured_report = response.json()["structured_report"]
+    sections = structured_report["sections"]
+    assert [section["number"] for section in sections] == list(range(1, 12))
+    assert [section["id"] for section in sections] == [
+        "executive_summary",
+        "priority",
+        "score_details",
+        "signal_analysis",
+        "financial_view",
+        "strategic_connection",
+        "proposal_themes",
+        "first_approach",
+        "hearing_questions",
+        "evidence",
+        "caveats",
+    ]
+
+    score_components = structured_report["score_components"]
+    assert [component["label"] for component in score_components] == [
+        "CRE関連シグナル",
+        "財務・投資余力",
+        "戦略イベント",
+        "提案適合度",
+    ]
+    for component in score_components:
+        assert {"evaluation_target", "evaluation_viewpoint", "rationale", "score_text"}.issubset(component)
+        assert "/" in component["score_text"]
+        assert "最大" not in component["score_text"]
+        assert component["rationale"]
+    assert "最大35点中" not in str(score_components)
+    assert "最大25点中" not in str(score_components)
+    assert "最大15点中" not in str(score_components)

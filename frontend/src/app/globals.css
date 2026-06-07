@@ -446,13 +446,6 @@ h4 {
   border-radius: inherit;
 }
 
-.score-bar__reason {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .recommendation-box p:last-child,
 .evidence-box p:last-child,
 .score-breakdown__explanation {
@@ -581,21 +574,6 @@ h4 {
 .report-content {
   display: grid;
   gap: 16px;
-}
-
-.markdown-report {
-  max-height: 520px;
-  margin: 0;
-  padding: 20px;
-  overflow: auto;
-  color: #1e293b;
-  background: #0f172a0d;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 13px;
-  line-height: 1.75;
-  white-space: pre-wrap;
 }
 
 .data-source-badge {
@@ -819,4 +797,202 @@ h4 {
   .score-component-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.metric-grid--compact {
+  grid-template-columns: repeat(2, minmax(180px, 260px));
+  justify-content: start;
+}
+
+.metric-grid--compact .metric-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgb(23 32 51 / 5%);
+}
+
+.metric-grid--compact .metric-card__label,
+.metric-grid--compact .metric-card__helper {
+  font-size: 11px;
+}
+
+.metric-grid--compact .metric-card__value {
+  font-size: 22px;
+}
+
+.result-count {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.financial-metric-card {
+  padding: 14px;
+  background: var(--soft-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.financial-metric-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.financial-metric-card__header span {
+  margin: 0;
+}
+
+.metric-gauge {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  background: #e7edf6;
+  border-radius: 999px;
+}
+
+.metric-gauge span {
+  display: block;
+  height: 100%;
+  margin: 0;
+  background: linear-gradient(90deg, #60a5fa, var(--primary));
+  border-radius: inherit;
+}
+
+.metric-gauge__zero {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #64748b;
+  z-index: 1;
+}
+
+.metric-gauge__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.score-detail-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.score-detail-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.score-detail-table th,
+.score-detail-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.65;
+  text-align: left;
+  vertical-align: top;
+}
+
+.score-detail-table thead th {
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.score-detail-table tbody th {
+  width: 150px;
+  color: #1e293b;
+  font-weight: 950;
+}
+
+.score-detail-table tr:last-child th,
+.score-detail-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.score-detail-table td:last-child {
+  white-space: nowrap;
+  color: var(--primary);
+}
+
+@media (max-width: 680px) {
+  .metric-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .score-detail-table,
+  .score-detail-table thead,
+  .score-detail-table tbody,
+  .score-detail-table tr,
+  .score-detail-table th,
+  .score-detail-table td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .score-detail-table thead {
+    display: none;
+  }
+
+  .score-detail-table tr {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .score-detail-table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .score-detail-table tbody th,
+  .score-detail-table td {
+    padding: 6px 0;
+    border-bottom: 0;
+  }
+}
+
+.caution-panel {
+  gap: 4px;
+  padding: 12px 16px;
+  background: #fffaf2;
+  border-color: #fdecc8;
+  box-shadow: none;
+}
+
+.caution-panel strong {
+  color: #92400e;
+  font-size: 12px;
+}
+
+.caution-panel p {
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.report-section--score {
+  grid-column: 1 / -1;
+}
+
+.score-detail-table tbody th strong,
+.score-detail-table tbody th span {
+  display: block;
+}
+
+.score-detail-table tbody th span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.55;
 }
