@@ -1,7 +1,6 @@
 import { CompanyDetail } from '@/components/CompanyDetail';
 import { CompanyRankTable } from '@/components/CompanyRankTable';
-import { MetricCard } from '@/components/MetricCard';
-import { getCompanies, getCompanyDetail, getCompanyReport, getHealth } from '@/lib/api';
+import { getCompanies, getCompanyDetail, getCompanyReport } from '@/lib/api';
 import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, DataSourceType, FinancialMetricScales, PriorityLabel } from '@/types/api';
 
 const priorityOrder: Record<string, number> = { 高: 3, 中: 2, 低: 1, 未評価: 0 };
@@ -34,22 +33,26 @@ function latestUpdatedAt(details: CompanyDetailResponse[]): string | undefined {
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 }
 
-function roundedCeil(value: number, step: number): number {
-  return Math.max(step, Math.ceil(value / step) * step);
+function niceCeil(value: number, minimum: number): number {
+  const safeValue = Math.max(value, minimum);
+  const exponent = 10 ** Math.floor(Math.log10(safeValue));
+  const normalized = safeValue / exponent;
+  const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 3 ? 3 : normalized <= 5 ? 5 : 10;
+  return multiplier * exponent;
 }
 
 function buildFinancialScales(details: CompanyDetailResponse[]): FinancialMetricScales {
   const metrics = details.map((detail) => detail.latest_financial_metrics).filter((metric): metric is NonNullable<typeof metric> => Boolean(metric));
   const maxMargin = Math.max(20, ...metrics.map((metric) => metric.operating_margin_pct));
-  const maxCapexOku = Math.max(1000, ...metrics.map((metric) => metric.capex_amount / 100));
+  const maxCapexOku = Math.max(5000, ...metrics.map((metric) => metric.capex_amount / 100));
   const maxCashOku = Math.max(10000, ...metrics.map((metric) => metric.cash_and_equivalents / 100));
 
   return {
     growthMinPct: -10,
     growthMaxPct: 20,
-    marginMaxPct: roundedCeil(maxMargin, 5),
-    capexMaxOku: roundedCeil(maxCapexOku, 1000),
-    cashMaxOku: roundedCeil(maxCashOku, 5000)
+    marginMaxPct: niceCeil(maxMargin, 20),
+    capexMaxOku: niceCeil(maxCapexOku, 5000),
+    cashMaxOku: niceCeil(maxCashOku, 10000)
   };
 }
 
@@ -58,7 +61,7 @@ type HomeProps = {
 };
 
 export default async function Home({ searchParams }: HomeProps) {
-  const [health, companiesResponse] = await Promise.all([getHealth(), getCompanies()]);
+  const companiesResponse = await getCompanies();
   const companies = companiesResponse?.items ?? [];
   const selectedIndustry = firstParam(searchParams?.industry) ?? 'すべて';
   const selectedPriority = (firstParam(searchParams?.priority) ?? 'すべて') as PriorityLabel | 'すべて';
@@ -81,30 +84,21 @@ export default async function Home({ searchParams }: HomeProps) {
     selectedCompany ? getCompanyReport(selectedCompany.company_id) : Promise.resolve(null)
   ]);
 
-  const modeLabel = health?.mode === 'openai' ? 'OpenAI APIモード' : 'モックモード';
   const financialScales = buildFinancialScales(allDetails);
 
   return (
     <main>
       <div className="container dashboard">
-        <section className="hero dashboard-hero">
-          <div>
+        <header className="dashboard-toolbar">
+          <div className="dashboard-toolbar__title">
             <p className="eyebrow">CRE CONSULTING SALES BI</p>
             <h1>CRE営業支援BI</h1>
-            <p className="description">
-              日本国内の上場企業について、日本語の公開IR資料に基づくCRE営業仮説、スコアリング理由、根拠資料を確認する営業支援ダッシュボードです。
-            </p>
           </div>
-          <div className="hero-status">
-            <span className="badge">公開情報ベース分析</span>
-            <span className="connection">バックエンド: {health?.status === 'ok' ? '接続済み' : '未接続'} / {modeLabel}</span>
+          <div className="dashboard-toolbar__meta" aria-label="ダッシュボード指標">
+            <span>対象企業数 <strong>{companiesResponse?.total ?? 0}社</strong></span>
+            <span>最新更新 <strong>{formatDateTime(latestUpdatedAt(allDetails))}</strong></span>
           </div>
-        </section>
-
-        <section className="metric-grid metric-grid--compact" aria-label="ダッシュボード指標">
-          <MetricCard label="対象企業数" value={`${companiesResponse?.total ?? 0}社`} helper="現在のランキング対象" tone="primary" />
-          <MetricCard label="最新更新" value={formatDateTime(latestUpdatedAt(allDetails))} helper="スコア計算時刻（JST）" />
-        </section>
+        </header>
 
         <section className="panel">
           <div className="section-heading">

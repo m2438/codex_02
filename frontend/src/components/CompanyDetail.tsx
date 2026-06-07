@@ -9,7 +9,7 @@ const defaultFinancialScales: FinancialMetricScales = {
   growthMaxPct: 20,
   marginMaxPct: 20,
   capexMaxOku: 5000,
-  cashMaxOku: 30000
+  cashMaxOku: 100000
 };
 
 function dataSourceLabel(value: 'synthetic' | 'public_demo'): string {
@@ -70,17 +70,21 @@ type MetricGaugeProps = {
   maxLabel: string;
   percent: number;
   zeroPercent?: number;
+  midpointLabel?: string;
 };
 
-function MetricGauge({ label, valueText, minLabel, maxLabel, percent, zeroPercent }: MetricGaugeProps) {
+function MetricGauge({ label, valueText, minLabel, maxLabel, percent, zeroPercent, midpointLabel }: MetricGaugeProps) {
   return (
     <div className="financial-metric-card">
       <div className="financial-metric-card__header"><span>{label}</span><strong>{valueText}</strong></div>
       <div className="metric-gauge" aria-label={`${label}: ${valueText}`}>
+        <i className="metric-gauge__tick metric-gauge__tick--start" />
+        <i className="metric-gauge__tick metric-gauge__tick--middle" />
+        <i className="metric-gauge__tick metric-gauge__tick--end" />
         {zeroPercent !== undefined ? <i className="metric-gauge__zero" style={{ left: `${clampPct(zeroPercent)}%` }} /> : null}
         <span style={{ width: `${clampPct(percent)}%` }} />
       </div>
-      <div className="metric-gauge__scale"><span>{minLabel}</span><span>{maxLabel}</span></div>
+      <div className="metric-gauge__scale"><span>{minLabel}</span><span>{midpointLabel ?? '中間'}</span><span>{maxLabel}</span></div>
     </div>
   );
 }
@@ -129,7 +133,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         <div className="panel">
           <div className="section-heading">
             <div>
-              <p className="section-kicker">最新財務メトリクス</p>
+              <p className="section-kicker">財務関連指標</p>
               <h3>投資余力と事業変化</h3>
             </div>
             {metrics ? <span className="pill">FY{metrics.fiscal_year}</span> : null}
@@ -143,6 +147,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
                 maxLabel={`${financialScales.growthMaxPct}%`}
                 percent={(metrics.revenue_growth_pct - financialScales.growthMinPct) / (financialScales.growthMaxPct - financialScales.growthMinPct) * 100}
                 zeroPercent={(0 - financialScales.growthMinPct) / (financialScales.growthMaxPct - financialScales.growthMinPct) * 100}
+                midpointLabel="0%"
               />
               <MetricGauge
                 label="営業利益率"
@@ -150,6 +155,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
                 minLabel="0%"
                 maxLabel={`${financialScales.marginMaxPct}%`}
                 percent={metrics.operating_margin_pct / financialScales.marginMaxPct * 100}
+                midpointLabel={`${financialScales.marginMaxPct / 2}%`}
               />
               <MetricGauge
                 label="設備投資額"
@@ -157,6 +163,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
                 minLabel="0億円"
                 maxLabel={formatOku(financialScales.capexMaxOku)}
                 percent={(metrics.capex_amount / 100) / financialScales.capexMaxOku * 100}
+                midpointLabel={formatOku(financialScales.capexMaxOku / 2)}
               />
               <MetricGauge
                 label="現預金等"
@@ -164,6 +171,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
                 minLabel="0億円"
                 maxLabel={formatOku(financialScales.cashMaxOku)}
                 percent={(metrics.cash_and_equivalents / 100) / financialScales.cashMaxOku * 100}
+                midpointLabel={formatOku(financialScales.cashMaxOku / 2)}
               />
             </div>
           ) : <p className="empty-state">財務メトリクスは未登録です。</p>}
@@ -171,26 +179,6 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
 
         <div className="panel">
           <ScoreBreakdown score={score} />
-        </div>
-      </div>
-
-      <div className="panel documents-panel">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">根拠資料</p>
-            <h3>参照IR資料・出典URL</h3>
-          </div>
-          <span className="pill">{detail.documents.length}件</span>
-        </div>
-        <div className="document-list">
-          {detail.documents.map((document) => (
-            <article className="document-card" key={document.document_id}>
-              <h4>{document.document_title ?? document.title}</h4>
-              <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name} / 言語: {languageLabel(document.document_language)}</p>
-              {document.source_url ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : <span>URLなし</span>}
-              {document.source_note ? <p className="document-card__note">{document.source_note}</p> : null}
-            </article>
-          ))}
         </div>
       </div>
 
@@ -266,6 +254,25 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         </div>
         <div className="signal-list">
           {detail.cre_signals.map((signal) => <SignalCard key={signal.signal_id} signal={signal} />)}
+        </div>
+      </div>
+
+      <div className="panel documents-panel">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">根拠資料</p>
+            <h3>参照IR資料・出典URL</h3>
+          </div>
+          <span className="pill">{detail.documents.length}件</span>
+        </div>
+        <div className="document-list">
+          {detail.documents.map((document) => (
+            <article className="document-card" key={document.document_id}>
+              <h4>{document.document_title ?? document.title}</h4>
+              <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name} / 言語: {languageLabel(document.document_language)}</p>
+              {document.source_url ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : <span>URLなし</span>}
+            </article>
+          ))}
         </div>
       </div>
     </section>
