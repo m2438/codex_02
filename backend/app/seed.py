@@ -6,7 +6,7 @@ from typing import TypedDict
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from app.models import CRESignal, Company, Document, FinancialMetric, Score
+from app.models import CRESignal, Company, Document, FinancialMetric, Report, Score
 from app.services.scoring import FinancialInputs, SignalInputs, calculate_sales_priority_score
 
 
@@ -56,33 +56,6 @@ SIGNAL_PATTERNS = {
     "構造改革": ("構造改革と事業ポートフォリオ見直し", "低収益事業の構造改革と事業ポートフォリオ見直しを通じ、資本効率の改善を進めます。"),
 }
 
-COMPANY_SEEDS: list[CompanySeed] = [
-    {"name": "AAA株式会社", "industry": "電気機器", "profile": "半導体・産業機器向け電子部品を国内外に展開する大手メーカー", "location": "東京都千代田区", "employees": 42600, "revenue": 2_480_000, "capex": 420_000, "cash": 820_000, "growth": 7.4, "margin": 11.8, "signals": [{"type": "拠点再編", "confidence": "high"}, {"type": "設備投資", "confidence": "high"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "R&D拠点拡張", "confidence": "high"}]},
-    {"name": "BBB株式会社", "industry": "輸送用機器", "profile": "完成車部品とモビリティ関連システムを扱うグローバル製造業", "location": "愛知県名古屋市", "employees": 68100, "revenue": 3_760_000, "capex": 510_000, "cash": 1_120_000, "growth": 5.8, "margin": 8.6, "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "物流再編", "confidence": "high"}, {"type": "BCP", "confidence": "medium"}, {"type": "建替え", "confidence": "medium"}]},
-    {"name": "CCC株式会社", "industry": "情報・通信業", "profile": "クラウド、データセンター、法人向けDXサービスを提供する情報通信企業", "location": "東京都港区", "employees": 18400, "revenue": 1_180_000, "capex": 260_000, "cash": 530_000, "growth": 9.2, "margin": 14.5, "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "本社機能見直し", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}]},
-    {"name": "DDD株式会社", "industry": "小売業", "profile": "全国店舗網とECチャネルを持つ総合小売グループ", "location": "大阪市北区", "employees": 35300, "revenue": 1_560_000, "capex": 180_000, "cash": 310_000, "growth": 3.6, "margin": 4.9, "signals": [{"type": "物流再編", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}, {"type": "働き方改革", "confidence": "low"}]},
-    {"name": "EEE株式会社", "industry": "化学", "profile": "高機能素材、電子材料、環境関連材料を手掛ける化学メーカー", "location": "東京都中央区", "employees": 29100, "revenue": 1_920_000, "capex": 330_000, "cash": 640_000, "growth": 6.7, "margin": 10.2, "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "資産売却", "confidence": "high"}, {"type": "脱炭素", "confidence": "high"}, {"type": "構造改革", "confidence": "medium"}]},
-    {"name": "FFF株式会社", "industry": "医薬品", "profile": "新薬開発とライセンス事業を軸とする研究開発型製薬会社", "location": "大阪市中央区", "employees": 12200, "revenue": 820_000, "capex": 95_000, "cash": 450_000, "growth": 2.2, "margin": 16.4, "signals": [{"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "働き方改革", "confidence": "medium"}]},
-    {"name": "GGG株式会社", "industry": "機械", "profile": "FA機器、建設機械、保守サービスを展開する機械メーカー", "location": "京都市下京区", "employees": 23800, "revenue": 1_340_000, "capex": 160_000, "cash": 280_000, "growth": 4.9, "margin": 9.8, "signals": [{"type": "海外展開", "confidence": "medium"}, {"type": "設備投資", "confidence": "medium"}, {"type": "BCP", "confidence": "low"}]},
-    {"name": "HHH株式会社", "industry": "食料品", "profile": "加工食品、冷凍食品、業務用食材を扱う食品グループ", "location": "東京都品川区", "employees": 20100, "revenue": 970_000, "capex": 120_000, "cash": 180_000, "growth": 1.8, "margin": 5.7, "signals": [{"type": "物流再編", "confidence": "medium"}, {"type": "脱炭素", "confidence": "low"}]},
-    {"name": "III株式会社", "industry": "建設業", "profile": "国内大型建築、都市インフラ、エンジニアリングを展開する総合建設会社", "location": "東京都新宿区", "employees": 17300, "revenue": 1_740_000, "capex": 90_000, "cash": 360_000, "growth": 4.1, "margin": 6.8, "signals": [{"type": "本社機能見直し", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}]},
-    {"name": "JJJ株式会社", "industry": "不動産業", "profile": "オフィス、商業、物流施設の開発・運営を行う総合不動産会社", "location": "東京都千代田区", "employees": 9800, "revenue": 760_000, "capex": 280_000, "cash": 240_000, "growth": 3.4, "margin": 18.2, "signals": [{"type": "建替え", "confidence": "medium"}, {"type": "資産売却", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}]},
-    {"name": "KKK株式会社", "industry": "電気機器", "profile": "社会インフラ向け制御機器と保守サービスを提供する電機メーカー", "location": "東京都大田区", "employees": 31500, "revenue": 1_220_000, "capex": 140_000, "cash": 390_000, "growth": 5.1, "margin": 7.9, "signals": [{"type": "拠点再編", "confidence": "medium"}, {"type": "設備投資", "confidence": "medium"}, {"type": "本社機能見直し", "confidence": "low"}]},
-    {"name": "LLL株式会社", "industry": "陸運業", "profile": "幹線輸送、倉庫、3PLを全国で展開する物流企業", "location": "東京都江東区", "employees": 47200, "revenue": 1_080_000, "capex": 220_000, "cash": 210_000, "growth": 4.7, "margin": 5.2, "signals": [{"type": "物流再編", "confidence": "high"}, {"type": "BCP", "confidence": "high"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "拠点再編", "confidence": "medium"}]},
-    {"name": "MMM株式会社", "industry": "精密機器", "profile": "医療機器、計測機器、産業用センサーを開発する精密機器メーカー", "location": "長野県松本市", "employees": 11600, "revenue": 690_000, "capex": 70_000, "cash": 160_000, "growth": 2.9, "margin": 10.7, "signals": [{"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "設備投資", "confidence": "low"}]},
-    {"name": "NNN株式会社", "industry": "サービス業", "profile": "BPO、コールセンター、人材サービスを全国展開する法人サービス企業", "location": "東京都渋谷区", "employees": 26500, "revenue": 540_000, "capex": 32_000, "cash": 120_000, "growth": 1.2, "margin": 4.4, "signals": [{"type": "働き方改革", "confidence": "medium"}]},
-    {"name": "OOO株式会社", "industry": "金属製品", "profile": "建材、産業資材、環境設備向け部材を扱う素材加工メーカー", "location": "兵庫県神戸市", "employees": 14200, "revenue": 880_000, "capex": 105_000, "cash": 150_000, "growth": 2.5, "margin": 6.1, "signals": [{"type": "建替え", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}]},
-    {"name": "PPP株式会社", "industry": "卸売業", "profile": "産業資材、食品原料、海外トレーディングを手掛ける専門商社", "location": "東京都中央区", "employees": 8300, "revenue": 1_460_000, "capex": 45_000, "cash": 290_000, "growth": 3.8, "margin": 3.9, "signals": [{"type": "海外展開", "confidence": "medium"}, {"type": "本社機能見直し", "confidence": "low"}]},
-    {"name": "QQQ株式会社", "industry": "電気・ガス業", "profile": "発電、送配電、エネルギーサービスを展開するインフラ企業", "location": "福岡市博多区", "employees": 33700, "revenue": 2_120_000, "capex": 610_000, "cash": 760_000, "growth": 6.1, "margin": 7.4, "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "脱炭素", "confidence": "high"}, {"type": "BCP", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}]},
-    {"name": "RRR株式会社", "industry": "小売業", "profile": "都市型店舗と物流子会社を持つ専門小売チェーン", "location": "埼玉県さいたま市", "employees": 15600, "revenue": 620_000, "capex": 65_000, "cash": 95_000, "growth": 0.8, "margin": 3.6, "signals": [{"type": "物流再編", "confidence": "low"}, {"type": "働き方改革", "confidence": "low"}]},
-    {"name": "SSS株式会社", "industry": "化学", "profile": "基礎化学品と機能性樹脂を国内外に供給する素材メーカー", "location": "千葉県市原市", "employees": 19100, "revenue": 1_110_000, "capex": 135_000, "cash": 260_000, "growth": 3.2, "margin": 6.6, "signals": [{"type": "資産売却", "confidence": "medium"}, {"type": "構造改革", "confidence": "medium"}, {"type": "脱炭素", "confidence": "low"}]},
-    {"name": "TTT株式会社", "industry": "情報・通信業", "profile": "決済、法人SaaS、デジタルマーケティングを展開するITサービス企業", "location": "東京都港区", "employees": 9200, "revenue": 410_000, "capex": 38_000, "cash": 210_000, "growth": 8.7, "margin": 12.1, "signals": [{"type": "働き方改革", "confidence": "medium"}, {"type": "本社機能見直し", "confidence": "medium"}]},
-]
-
-
-# Phase 4A public_demo dataset: selected from Japanese listed companies with official IR pages
-# where an annual securities report or securities-report-derived financial report is publicly available.
-# The document text stores short CRE-oriented summaries only; it intentionally avoids long copyrighted excerpts.
 PUBLIC_COMPANY_SEEDS: list[PublicCompanySeed] = [
     {"ticker": "7203", "name": "トヨタ自動車株式会社", "market": "東証プライム", "industry": "輸送用機器", "profile": "自動車、モビリティ、研究開発、生産拠点を国内外に有する製造業", "location": "愛知県豊田市", "employees": 384000, "revenue": 48_036_000, "capex": 2_200_000, "cash": 9_400_000, "growth": 6.5, "margin": 9.4, "fiscal_year": "2025", "document_title": "有価証券報告書・半期報告書 2025年3月期", "document_type": "有価証券報告書", "source_url": "https://global.toyota/jp/ir/library/securities-report/index.html", "source_note": "公式IRの有価証券報告書ライブラリを参照。統合報告書・決算資料も補助的に確認。", "selection_reason": "国内最大級の製造業で、工場・研究開発・脱炭素投資などCRE論点が幅広い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開IR資料では、自動車生産・電動化・ソフトウェア領域の競争力強化に向けた投資継続が示されている。", "R&D拠点拡張": "統合報告書等では研究開発・先進技術への継続投資が説明されている。", "脱炭素": "カーボンニュートラルや電動化対応が経営課題として説明されている。", "BCP": "グローバル供給網と生産体制の強靭化が公開資料上の確認テーマとなる。"}},
     {"ticker": "3382", "name": "株式会社セブン＆アイ・ホールディングス", "market": "東証プライム", "industry": "小売業", "profile": "国内外のコンビニエンスストア等を展開する小売グループ", "location": "東京都千代田区", "employees": 83000, "revenue": 11_972_000, "capex": 520_000, "cash": 2_000_000, "growth": 1.2, "margin": 4.5, "fiscal_year": "2024", "document_title": "Annual Securities Report FY2024", "document_type": "有価証券報告書", "source_url": "https://www.7andi.com/en/ir/file/library/pdf/25_7andi_int04_en.pdf", "source_note": "公式IR掲載の英訳Annual Securities Reportを参照。", "selection_reason": "店舗網・物流・事業ポートフォリオ見直しの観点で小売CRE仮説を示しやすい。", "signals": [{"type": "物流再編", "confidence": "medium"}, {"type": "構造改革", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}], "evidence_by_signal": {"物流再編": "公開資料ではコンビニエンスストア事業を中心とした成長戦略と店舗・物流運営の高度化が説明されている。", "構造改革": "グループ事業の変革や価値向上施策がIR資料で説明されている。", "拠点再編": "店舗網・国内外事業運営の見直しはCRE観点で確認すべきテーマとなる。"}},
@@ -114,11 +87,69 @@ def _ensure_phase4a_columns(db: Session) -> None:
     document_columns = {
         "retrieved_at": "DATETIME",
         "source_note": "TEXT DEFAULT ''",
+        "document_language": "VARCHAR(20) DEFAULT 'ja'",
     }
     for column_name, definition in document_columns.items():
         if column_name not in existing_document_columns:
             db.execute(text(f"ALTER TABLE documents ADD COLUMN {column_name} {definition}"))
     db.commit()
+
+
+def _japanese_document_definitions(seed: PublicCompanySeed) -> list[dict[str, str]]:
+    document_urls = {
+        "7203": [
+            ("有価証券報告書・半期報告書 2025年3月期", "有価証券報告書", "https://global.toyota/jp/ir/library/securities-report/index.html"),
+            ("統合報告書 2025", "統合報告書", "https://global.toyota/jp/ir/library/annual/index.html"),
+        ],
+        "3382": [
+            ("有価証券報告書 2025年2月期", "有価証券報告書", "https://www.7andi.com/ir/library/secrepo.html"),
+            ("経営レポート 2025", "統合報告書", "https://www.7andi.com/ir/library/mr/index.html"),
+        ],
+        "9147": [
+            ("有価証券報告書 2024年12月期", "有価証券報告書", "https://www.nipponexpress-holdings.com/ja/ir/library/securities/"),
+            ("NXグループ 統合報告書2025", "統合報告書", "https://www.nipponexpress-holdings.com/ja/ir/library/annual/"),
+        ],
+        "9020": [
+            ("有価証券報告書 2025年3月期", "有価証券報告書", "https://www.jreast.co.jp/company/ir/library/securitiesreport/"),
+            ("JR東日本グループレポート2025（統合報告書）", "統合報告書", "https://www.jreast.co.jp/company/vision_report/report/"),
+        ],
+        "3231": [
+            ("有価証券報告書・Financial Report 2025", "有価証券報告書相当資料", "https://www.nomura-re-hd.co.jp/ir/ir_library/"),
+            ("統合レポート2025", "統合報告書", "https://www.nomura-re-hd.co.jp/ir/ir-library/integrated-report.html"),
+        ],
+        "9432": [
+            ("有価証券報告書等 2025年3月期", "有価証券報告書", "https://group.ntt/jp/ir/library/yuho/"),
+            ("統合報告書 2025（日本語版）", "統合報告書", "https://group.ntt/jp/ir/library/annual/index.html"),
+        ],
+        "6503": [
+            ("有価証券報告書 2025年3月期", "有価証券報告書", "https://www.mitsubishielectric.co.jp/ir/data/negotiable_securities/"),
+            ("統合報告書2025", "統合報告書", "https://www.mitsubishielectric.co.jp/ir/data/integrated_report/"),
+        ],
+        "4502": [
+            ("有価証券報告書 2024年度", "有価証券報告書", "https://www.takeda.com/jp/investors/sec-filings"),
+            ("統合報告書とESGデータブック", "統合報告書", "https://www.takeda.com/jp/investors/overview/"),
+        ],
+        "4182": [
+            ("有価証券報告書 2025年3月期", "有価証券報告書", "https://www.mgc.co.jp/ir/library/report.html"),
+            ("MGCレポート（統合報告書）", "統合報告書", "https://www.mgc.co.jp/ir/index.html"),
+        ],
+        "9531": [
+            ("有価証券報告書・四半期報告書 2025年3月期", "有価証券報告書", "https://www.tokyo-gas.co.jp/IR/library/yuho_j.html"),
+            ("統合報告書・決算説明会資料", "統合報告書・決算説明資料", "https://www.tokyo-gas.co.jp/IR/index.html"),
+        ],
+    }
+    return [
+        {
+            "title": title,
+            "document_type": document_type,
+            "source_url": source_url,
+            "source_note": (
+                "公式IRサイトの日本語資料ページを参照。公開情報に基づく営業仮説用の要約であり、"
+                "個別案件化や正式方針は原資料・ヒアリングで再確認してください。"
+            ),
+        }
+        for title, document_type, source_url in document_urls[seed["ticker"]]
+    ]
 
 
 def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str]) -> None:
@@ -143,26 +174,33 @@ def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str
         db.flush()
 
         signal_texts = [seed["evidence_by_signal"][signal["type"]] for signal in seed["signals"]]
-        document = Document(
-            company_id=company.id,
-            document_type=seed["document_type"],
-            title=seed["document_title"],
-            source_url=seed["source_url"],
-            source_name="公式IR資料",
-            retrieved_at=datetime.now(UTC),
-            source_note=seed["source_note"],
-            published_date=date(int(seed["fiscal_year"]), 6, 30),
-            fiscal_year=seed["fiscal_year"],
-            text_content=(
-                f"{seed['profile']}。公開IR資料に基づくCRE分析用の短い要約: "
-                + " ".join(signal_texts)
-                + " 本テキストは公開情報に基づく営業仮説用の要約であり、当該企業の正式なCRE方針を断定しません。"
-            ),
-            is_sample=False,
-        )
-        db.add(document)
-        db.flush()
+        documents: list[Document] = []
+        for doc_index, document_seed in enumerate(_japanese_document_definitions(seed), start=1):
+            document = Document(
+                company_id=company.id,
+                document_type=document_seed["document_type"],
+                title=document_seed["title"],
+                source_url=document_seed["source_url"],
+                source_name="公式IR資料（日本語）",
+                retrieved_at=datetime.now(UTC),
+                source_note=document_seed["source_note"],
+                document_language="ja",
+                published_date=date(int(seed["fiscal_year"]), min(12, 5 + doc_index), 30),
+                fiscal_year=seed["fiscal_year"],
+                text_content=(
+                    f"{seed['profile']}。{document_seed['title']}を中心に、CRE観点では拠点再編、工場・研究所・物流拠点、"
+                    "設備投資、老朽化・更新、BCP・防災、脱炭素・省エネ、不動産保有・遊休資産、"
+                    "資本効率・ROIC・PBR、事業ポートフォリオ、人的資本・働き方を確認対象とする。"
+                    + " ".join(signal_texts)
+                    + " 本テキストは公開情報に基づく営業仮説用の要約であり、当該企業の正式なCRE方針を断定しません。"
+                ),
+                is_sample=False,
+            )
+            db.add(document)
+            db.flush()
+            documents.append(document)
 
+        primary_document = documents[0]
         metric = FinancialMetric(
             company_id=company.id,
             fiscal_year=seed["fiscal_year"],
@@ -172,30 +210,37 @@ def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str
             cash_and_equivalents=seed["cash"],
             segment_change_note=(
                 "公式IR資料を参照し、CREデモ用のスコアリング入力として百万円単位に正規化した概算値です。"
+                "売上規模、設備投資、現預金等、資本効率改善・事業ポートフォリオ見直しの文脈を確認対象とし、"
                 "実営業で利用する場合は原資料の一次情報を再確認してください。"
             ),
-            source_document_id=document.id,
+            source_document_id=primary_document.id,
         )
         db.add(metric)
 
         signal_records: list[CRESignal] = []
-        for signal_seed in seed["signals"]:
+        for index, signal_seed in enumerate(seed["signals"]):
             title, _ = SIGNAL_PATTERNS[signal_seed["type"]]
-            evidence_text = seed["evidence_by_signal"][signal_seed["type"]]
+            evidence_text = (
+                seed["evidence_by_signal"][signal_seed["type"]]
+                + " CRE観点では、対象拠点の所在、築年数・稼働率、投資予定、BCP・省エネ要件、"
+                "不動産保有方針、資本効率指標との接続を追加確認することで、PM/CM、拠点ポートフォリオ、"
+                "更新投資、遊休資産活用の仮説を具体化できる可能性があります。"
+            )
+            source_document = documents[index % len(documents)]
             signal_records.append(
                 CRESignal(
                     company_id=company.id,
-                    document_id=document.id,
+                    document_id=source_document.id,
                     signal_type=signal_seed["type"],
                     title=title,
                     description=(
-                        f"公開IR資料から{signal_seed['type']}に関する可能性が示唆されます。"
-                        "CRE観点では追加確認により営業仮説を具体化する必要があります。"
+                        f"日本語の公開IR資料から{signal_seed['type']}に関する確認候補が示唆されます。"
+                        "正式方針や実際の提案機会ではなく、CRE観点で追加確認すべき営業仮説として扱います。"
                     ),
                     evidence_text=evidence_text,
-                    source_reference=f"{document.title} / {document.source_url}",
+                    source_reference=f"{source_document.title} / {source_document.source_url}",
                     confidence=signal_seed["confidence"],
-                    confidence_reason="公開IR資料の短い要約に基づくデモ用シグナルです。実営業では一次情報と個別ヒアリングで検証してください。",
+                    confidence_reason="公開IR資料の要約に基づくデモ用シグナルです。実営業では一次情報と個別ヒアリングで検証してください。",
                     extracted_by="public_demo_seed",
                 )
             )
@@ -234,132 +279,24 @@ def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str
     db.commit()
 
 
-
 def seed_database(db: Session) -> None:
-    """Seed deterministic synthetic and public-demo data when the SQLite database is empty."""
+    """Seed deterministic public-demo data when the SQLite database is empty or outdated."""
 
     _ensure_phase4a_columns(db)
-    first_company = db.query(Company).order_by(Company.id).first()
-    if first_company is not None and first_company.name.startswith("サンプル上場企業"):
-        for model in (Score, CRESignal, FinancialMetric, Document, Company):
+    public_count = db.query(Company).filter(Company.data_source_type == "public_demo").count()
+    synthetic_count = db.query(Company).filter(Company.data_source_type == "synthetic").count()
+    document_count = db.query(Document).count()
+    expected_document_count = len(PUBLIC_COMPANY_SEEDS) * 2
+
+    if synthetic_count or public_count != len(PUBLIC_COMPANY_SEEDS) or document_count < expected_document_count:
+        for model in (Score, CRESignal, FinancialMetric, Document, Report, Company):
             db.query(model).delete()
         db.commit()
+        _seed_public_demo_companies(db, existing_public_tickers=set())
+        return
 
-    if db.query(Company).filter(Company.data_source_type == "synthetic").count() == 0:
-        _seed_synthetic_companies(db)
-
-    db.query(Company).filter(Company.data_source_type.is_(None)).update({Company.data_source_type: "synthetic"})
+    # Backfill Phase 4A compatibility fields for databases that already contain only public demo data.
+    db.query(Company).filter(Company.data_source_type.is_(None)).update({Company.data_source_type: "public_demo"})
     db.query(Company).filter(Company.listing_country.is_(None)).update({Company.listing_country: "日本"})
-    db.query(Company).filter(Company.selection_reason.is_(None)).update({Company.selection_reason: "合成デモデータ"})
-    public_tickers = {seed["ticker"] for seed in PUBLIC_COMPANY_SEEDS}
-    synthetic_companies = db.query(Company).filter(Company.data_source_type == "synthetic").order_by(Company.id).all()
-    for index, company in enumerate(synthetic_companies, start=1):
-        if company.ticker in public_tickers or company.ticker.startswith("9"):
-            company.ticker = f"S{index:03d}"
-    db.commit()
-
-    if db.query(Company).filter(Company.data_source_type == "public_demo").count() < len(PUBLIC_COMPANY_SEEDS):
-        existing_public_tickers = {ticker for (ticker,) in db.query(Company.ticker).filter(Company.data_source_type == "public_demo").all()}
-        _seed_public_demo_companies(db, existing_public_tickers=existing_public_tickers)
-
-
-def _seed_synthetic_companies(db: Session) -> None:
-    for index, seed in enumerate(COMPANY_SEEDS, start=1):
-        company = Company(
-            ticker=f"S{index:03d}",
-            name=seed["name"],
-            market="東証プライム",
-            industry=seed["industry"],
-            headquarters_location=seed["location"],
-            employee_count=seed["employees"],
-            revenue=seed["revenue"],
-            fiscal_year="2025",
-            data_source_type="synthetic",
-            listing_country="日本",
-            is_public_company=True,
-            selection_reason="業種分散とCRE営業デモの比較容易性を目的とした合成サンプル企業です。",
-        )
-        db.add(company)
-        db.flush()
-
-        signal_texts = [SIGNAL_PATTERNS[signal["type"]][1] for signal in seed["signals"]]
-        document = Document(
-            company_id=company.id,
-            document_type="統合報告書",
-            title=f"{company.name} 2025年3月期 統合報告書（サンプル）",
-            source_url=None,
-            source_name="サンプルIR文書",
-            published_date=date(2025, 6, min(28, index)),
-            fiscal_year="2025",
-            text_content=(
-                f"{seed['profile']}。" + " ".join(signal_texts) +
-                " 本テキストはCRE Sales Intelligenceデモ用の合成サンプルであり、実在企業の開示情報ではありません。"
-            ),
-            is_sample=True,
-            retrieved_at=datetime.now(UTC),
-            source_note="Phase 3.5合成デモ用のサンプルIR文書です。",
-        )
-        db.add(document)
-        db.flush()
-
-        metric = FinancialMetric(
-            company_id=company.id,
-            fiscal_year="2025",
-            revenue_growth_pct=seed["growth"],
-            operating_margin_pct=seed["margin"],
-            capex_amount=seed["capex"],
-            cash_and_equivalents=seed["cash"],
-            segment_change_note=f"{seed['profile']}として、合成デモデータ上は投資計画・資本効率・拠点運営の変化を比較できる設定です。",
-            source_document_id=document.id,
-        )
-        db.add(metric)
-
-        signal_records: list[CRESignal] = []
-        for signal_seed in seed["signals"]:
-            title, evidence_text = SIGNAL_PATTERNS[signal_seed["type"]]
-            signal_records.append(
-                CRESignal(
-                    company_id=company.id,
-                    document_id=document.id,
-                    signal_type=signal_seed["type"],
-                    title=title,
-                    description=(
-                        f"{signal_seed['type']}に関する記述があり、CRE戦略・PM/CM・拠点ポートフォリオ見直しの営業仮説につながります。"
-                    ),
-                    evidence_text=evidence_text,
-                    source_reference=f"{document.title} / サンプル本文",
-                    confidence=signal_seed["confidence"],
-                    confidence_reason="サンプル文書内に対象テーマの明示的な記述があるため。低信頼の場合は示唆が間接的で追加確認が必要です。",
-                    extracted_by="seed_mock",
-                )
-            )
-        db.add_all(signal_records)
-        db.flush()
-
-        result = calculate_sales_priority_score(
-            signals=[SignalInputs(signal_type=s.signal_type, confidence=s.confidence) for s in signal_records],
-            financial=FinancialInputs(
-                revenue=company.revenue,
-                revenue_growth_pct=metric.revenue_growth_pct,
-                operating_margin_pct=metric.operating_margin_pct,
-                capex_amount=metric.capex_amount,
-                cash_and_equivalents=metric.cash_and_equivalents,
-            ),
-            company_name=company.name,
-        )
-        db.add(
-            Score(
-                company_id=company.id,
-                total_score=result.total_score,
-                priority_label=result.priority_label,
-                signal_score=result.signal_score,
-                financial_score=result.financial_score,
-                strategic_event_score=result.strategic_event_score,
-                fit_score=result.fit_score,
-                explanation=result.explanation,
-                recommended_action=result.recommended_action,
-                calculated_at=result.calculated_at,
-            )
-        )
-
+    db.query(Document).filter(Document.document_language.is_(None)).update({Document.document_language: "ja"})
     db.commit()

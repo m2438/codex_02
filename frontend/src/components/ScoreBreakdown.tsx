@@ -46,7 +46,7 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
           const detail = score.component_details?.[key];
           const value = detail?.score ?? score.component_scores[key];
           const maxPoints = detail?.max_points ?? fallbackMaxPoints[key];
-          const reason = detail?.reason ?? `${scoreLabels[key]}を最大${maxPoints}点で評価しています。`;
+          const reason = detail?.reason ?? `${scoreLabels[key]}について、公開資料の根拠と財務・戦略テーマの接続性を評価しています。`;
           return (
             <div className="score-bar" key={key}>
               <div className="score-bar__label-row">

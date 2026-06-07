@@ -114,8 +114,9 @@ def _confidence_reason(signals: list[SignalInputs], score: int) -> str:
     low_count = sum(1 for signal in signals if signal.confidence == "low")
     unique_types = len({signal.signal_type for signal in signals})
     return (
-        f"CRE関連シグナル{len(signals)}件（高{high_count}件・中{medium_count}件・低{low_count}件）と"
-        f"テーマの多様性{unique_types}種類を評価し、最大35点中{score}点としました。"
+        f"CRE関連シグナル{len(signals)}件（高{high_count}件・中{medium_count}件・低{low_count}件）を確認し、"
+        f"拠点・投資・BCP・脱炭素などのテーマが{unique_types}種類に分散しているかを評価しました。"
+        "複数の論点が確認できる場合、単一施策ではなく拠点ポートフォリオや投資計画全体の確認余地が高いとみなします。"
     )
 
 
@@ -135,8 +136,10 @@ def _financial_score(financial: FinancialInputs) -> tuple[int, str]:
     margin_points = 2 if financial.operating_margin_pct >= 9 else 1 if financial.operating_margin_pct >= 4 else 0
     score = min(COMPONENT_MAX_POINTS["financial_score"], revenue_points + capex_points + cash_points + growth_points + margin_points)
     reason = (
-        f"売上規模{revenue_points}点、設備投資{capex_points}点、現預金等{cash_points}点、"
-        f"成長率{growth_points}点、営業利益率{margin_points}点を積み上げ、最大25点中{score}点としました。"
+        "売上規模、設備投資、現預金等、売上成長率、営業利益率を確認し、"
+        "大型投資や施設更新を検討し得る事業規模・投資余力があるかを評価しました。"
+        f"内訳上は売上規模{revenue_points}、設備投資{capex_points}、現預金等{cash_points}、"
+        f"成長率{growth_points}、営業利益率{margin_points}の評価です。"
     )
     return score, reason
 
@@ -147,9 +150,9 @@ def _strategic_event_score(signals: list[SignalInputs]) -> tuple[int, str]:
     confidence_bonus = sum(2 for signal in signals if signal.signal_type in STRATEGIC_SIGNAL_TYPES and signal.confidence == "high")
     score = min(COMPONENT_MAX_POINTS["strategic_event_score"], len(unique_strategic_types) * 7 + confidence_bonus)
     reason = (
-        f"中計・構造改革・資本効率・拠点投資に接続しやすいテーマ{len(unique_strategic_types)}種類"
-        f"（{ '、'.join(unique_strategic_types) if unique_strategic_types else '該当なし' }）と高信頼度補正を評価し、"
-        f"最大25点中{score}点としました。"
+        f"中期施策、構造改革、資本効率、拠点投資に接続しやすいテーマとして"
+        f"{ '、'.join(unique_strategic_types) if unique_strategic_types else '該当なし' }を確認しました。"
+        "高信頼度のシグナルがある場合は、公開資料上で経営課題との接続が比較的明確な確認候補として扱います。"
     )
     return score, reason
 
@@ -161,8 +164,9 @@ def _fit_score(signals: list[SignalInputs], financial: FinancialInputs) -> tuple
     investment_points = 2 if financial.capex_amount >= 120_000 or financial.cash_and_equivalents >= 300_000 else 0
     score = min(COMPONENT_MAX_POINTS["fit_score"], core_fit_points + high_fit_points + investment_points)
     reason = (
-        f"CRE戦略、PM/CM、再開発、遊休資産活用、不動産ポートフォリオ最適化に直結するテーマ適合性"
-        f"{core_fit_points + high_fit_points}点と投資余力補正{investment_points}点により、最大15点中{score}点としました。"
+        "CRE戦略、PM/CM、再開発、遊休資産活用、不動産ポートフォリオ最適化に接続しやすいテーマを確認し、"
+        "コンサルティング提案として入口を設定しやすいかを評価しました。"
+        f"テーマ適合性の評価値は{core_fit_points + high_fit_points}、投資余力による補正は{investment_points}です。"
     )
     return score, reason
 
@@ -175,7 +179,7 @@ def build_component_details(
         key: ComponentScoreDetail(
             score=component_scores[key],
             max_points=COMPONENT_MAX_POINTS[key],
-            reason=reasons.get(key, f"{COMPONENT_LABELS[key]}を評価し、最大{COMPONENT_MAX_POINTS[key]}点中{component_scores[key]}点としました。"),
+            reason=reasons.get(key, f"{COMPONENT_LABELS[key]}について、公開資料のシグナル、財務入力、戦略テーマ、提案接続性を確認しました。"),
         )
         for key in COMPONENT_MAX_POINTS
     }
