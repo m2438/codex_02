@@ -105,15 +105,14 @@ def _executive_summary(*, company: Company, score: Score | None, signals: list[C
 
 def _priority_section(*, score: Score | None) -> str:
     if score is None:
-        return "- 優先度: 未評価\n- 理由: スコア情報が未登録です。"
+        return "- 優先度: 未評価\n- 判定要約: スコア情報が未登録のため、公開情報の追加確認後に再評価します。"
+    summary = "重点アプローチ候補" if score.priority_label == "高" else "継続確認候補" if score.priority_label == "中" else "モニタリング候補"
     return "\n".join(
         [
             f"- 優先度: **{score.priority_label}**",
             f"- 総合スコア: **{score.total_score}点 / 100点**",
-            "- 判定閾値: 高=85点以上、中=50点以上85点未満、低=50点未満",
-            f"- 全体評点理由: {score.explanation}",
-            f"- 推奨アクション: {score.recommended_action}",
-            "- 公開情報ベースの分析では、開示資料から読み取れる事実、CRE観点での仮説、追加確認事項を分けて扱います。",
+            f"- 判定要約: {summary}として、公開IR資料で確認できるCRE関連テーマを初回面談の確認仮説に整理します。",
+            "- 本判定は公開情報に基づく営業仮説であり、正式方針・案件化状況は一次情報とヒアリングで確認します。",
         ]
     )
 
@@ -268,7 +267,9 @@ def _signals_section(*, signals: list[CRESignal], documents: list[Document]) -> 
 
 def _financial_section(*, company: Company, metric: FinancialMetric | None) -> str:
     if metric is None:
-        return "- 財務メトリクスは未登録です。財務余力の評価は保留してください。"
+        return "- 財務関連指標は未登録です。財務余力の評価は保留してください。"
+
+    insights = _financial_insights(metric=metric)
     return "\n".join(
         [
             f"- 対象年度: FY{metric.fiscal_year}",
@@ -277,10 +278,41 @@ def _financial_section(*, company: Company, metric: FinancialMetric | None) -> s
             f"- 営業利益率: {metric.operating_margin_pct:.1f}%",
             f"- 設備投資額: {format_million_yen_to_oku(metric.capex_amount)}",
             f"- 現預金等: {format_million_yen_to_oku(metric.cash_and_equivalents)}",
-            f"- 所見: {metric.segment_change_note} 売上規模と設備投資額が大きい企業では、投資判断前の基本構想、"
-            "PM/CM体制、拠点統廃合時の移転計画、不動産ポートフォリオ最適化の検討余地が相対的に高まります。",
+            *[f"- 所見: {insight}" for insight in insights],
         ]
     )
+
+
+def _financial_insights(*, metric: FinancialMetric) -> list[str]:
+    insights: list[str] = []
+    if metric.revenue_growth_pct >= 5.0:
+        insights.append("売上成長率が高く、事業拡大に伴う営業・物流・生産・研究開発拠点の増強需要を確認する余地があります。")
+    elif metric.revenue_growth_pct <= 1.0:
+        insights.append("売上成長率が低位のため、拠点再編、低稼働資産の見直し、既存ポートフォリオの資産効率改善を確認する段階です。")
+    else:
+        insights.append("売上成長率は安定圏にあり、新規拡張と既存拠点最適化のどちらを優先するかを事業別に確認する必要があります。")
+
+    if metric.operating_margin_pct >= 12.0:
+        insights.append("営業利益率が高く、拠点高度化、省エネ、BCP、研究開発・製造品質向上への投資余力を仮説化できます。")
+    elif metric.operating_margin_pct <= 5.0:
+        insights.append("営業利益率が低位のため、大型新規投資よりも既存資産活用、賃借条件見直し、保全・エネルギーコスト改善型CRE施策が入口になり得ます。")
+    else:
+        insights.append("営業利益率は中位であり、投資採算性を確認しながら更新投資・省エネ投資・拠点再配置を選別する提案が適します。")
+
+    if metric.capex_amount >= 300_000:
+        insights.append("設備投資額が大きく、工場・研究所・物流施設の建替え、設備更新、施工計画、PM/CM支援の具体論点につながりやすい状況です。")
+    elif metric.capex_amount <= 100_000:
+        insights.append("設備投資額は相対的に小さく、当面の大型投資案件よりも既存拠点の用途見直し、保全計画、ポートフォリオ整理を優先確認します。")
+    else:
+        insights.append("設備投資額は中位であり、進行中投資の有無、更新周期、発注者側のプロジェクト管理体制を確認する価値があります。")
+
+    if metric.cash_and_equivalents >= 1_000_000:
+        insights.append("現預金等が大きく、投資余力、M&A後の拠点統合、遊休資産活用、建替え・再開発の優先順位を確認できます。")
+    elif metric.cash_and_equivalents <= 250_000:
+        insights.append("現預金等は限定的であり、段階投資、投資回収、外部資金、リース・賃借戦略を含めたCRE施策の採算性確認が重要です。")
+    else:
+        insights.append("現預金等は一定水準にあり、自己資金投資と賃借・外部資金活用のバランスを確認しながらCREテーマを絞り込めます。")
+    return insights
 
 
 def _strategic_connection(*, company: Company, signals: list[CRESignal], metric: FinancialMetric | None) -> str:

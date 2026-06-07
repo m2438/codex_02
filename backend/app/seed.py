@@ -209,9 +209,9 @@ def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str
             capex_amount=seed["capex"],
             cash_and_equivalents=seed["cash"],
             segment_change_note=(
-                "公式IR資料を参照し、CREデモ用のスコアリング入力として百万円単位に正規化した概算値です。"
-                "売上規模、設備投資、現預金等、資本効率改善・事業ポートフォリオ見直しの文脈を確認対象とし、"
-                "実営業で利用する場合は原資料の一次情報を再確認してください。"
+                f"{seed['industry']}の公開IR指標を基に、売上成長率{seed['growth']}%、"
+                f"営業利益率{seed['margin']}%、設備投資額{seed['capex'] / 100:,.0f}億円、"
+                f"現預金等{seed['cash'] / 100:,.0f}億円をCRE仮説の入力値として整理。"
             ),
             source_document_id=primary_document.id,
         )

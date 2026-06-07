@@ -59,11 +59,6 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
           );
         })}
       </div>
-      <div className="recommendation-box">
-        <p className="recommendation-box__label">推奨アクション</p>
-        <p>{score.recommended_action}</p>
-      </div>
-      <p className="score-breakdown__explanation">{score.explanation}</p>
     </div>
   );
 }
