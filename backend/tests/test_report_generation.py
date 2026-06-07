@@ -8,12 +8,12 @@ def test_generate_company_report_includes_required_japanese_markdown_sections() 
     company = Company(
         id=1,
         ticker="9001",
-        name="サンプル上場企業01株式会社",
+        name="AAA株式会社",
         market="東証プライム",
         industry="電気機器",
         headquarters_location="東京都千代田区",
         employee_count=5000,
-        revenue=200_000_000_000,
+        revenue=1_200_000,
         fiscal_year="2025",
     )
     document = Document(
@@ -73,16 +73,22 @@ def test_generate_company_report_includes_required_japanese_markdown_sections() 
 
     assert report.generation_status == "generated"
     assert report.signal_count == 1
-    assert "# サンプル上場企業01株式会社 CRE営業仮説レポート" in report.markdown_content
+    assert "# AAA株式会社 CRE営業仮説レポート" in report.markdown_content
     for heading in [
-        "## Executive summary",
-        "## CRE sales priority",
-        "## Detected CRE-related signals",
-        "## Financial observations",
-        "## Suggested sales hypothesis",
-        "## Recommended first approach",
-        "## Evidence and source documents",
-        "## Caveats",
+        "## 1. エグゼクティブサマリー",
+        "## 2. CRE営業優先度の判定",
+        "## 3. スコア内訳と評点理由",
+        "## 4. CRE需要兆候の詳細分析",
+        "## 5. 財務・投資余力に関する所見",
+        "## 6. 経営課題・中期施策との接続仮説",
+        "## 7. 想定されるCRE提案テーマ",
+        "## 8. 初回アプローチ仮説",
+        "## 9. 追加ヒアリングで確認すべき事項",
+        "## 10. 根拠資料・根拠文",
+        "## 11. 留意事項",
     ]:
         assert heading in report.markdown_content
     assert "主要拠点での設備更新と能力増強を進めます。" in report.markdown_content
+    assert "PM/CM" in report.markdown_content
+    assert "追加検証" in report.markdown_content
+    assert "1.2兆円" in report.markdown_content

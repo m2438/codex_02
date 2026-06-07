@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app.models import CRESignal, Company, Document, FinancialMetric, Score
+from app.services.scoring import COMPONENT_LABELS, build_component_details
 from app.services.signal_extraction import extract_cre_signals_mock
 
 
@@ -18,13 +19,22 @@ class CompanyReportResult:
     signal_count: int
 
 
+def format_million_yen_to_oku(value: int) -> str:
+    """Format values stored in million yen as oku-yen for Japanese business reports."""
+
+    oku = value / 100
+    if oku >= 10_000:
+        return f"{oku / 10_000:.1f}兆円"
+    return f"{oku:,.0f}億円"
+
+
 def generate_company_report(
     *,
     company: Company,
     latest_metric: FinancialMetric | None,
     latest_score: Score | None,
 ) -> CompanyReportResult:
-    """Generate a Japanese Markdown report from stored database records."""
+    """Generate a Japanese Markdown CRE sales intelligence report from stored records."""
 
     generated_at = datetime.now(UTC)
     signals = sorted(company.cre_signals, key=lambda signal: signal.id)
@@ -34,28 +44,37 @@ def generate_company_report(
         [
             f"# {title}",
             "",
-            "## Executive summary",
-            _executive_summary(company=company, score=latest_score, signals=signals),
+            "## 1. エグゼクティブサマリー",
+            _executive_summary(company=company, score=latest_score, signals=signals, metric=latest_metric),
             "",
-            "## CRE sales priority",
+            "## 2. CRE営業優先度の判定",
             _priority_section(score=latest_score),
             "",
-            "## Detected CRE-related signals",
+            "## 3. スコア内訳と評点理由",
+            _score_detail_section(score=latest_score),
+            "",
+            "## 4. CRE需要兆候の詳細分析",
             _signals_section(signals=signals, documents=documents),
             "",
-            "## Financial observations",
-            _financial_section(metric=latest_metric),
+            "## 5. 財務・投資余力に関する所見",
+            _financial_section(company=company, metric=latest_metric),
             "",
-            "## Suggested sales hypothesis",
+            "## 6. 経営課題・中期施策との接続仮説",
+            _strategic_connection(company=company, signals=signals, metric=latest_metric),
+            "",
+            "## 7. 想定されるCRE提案テーマ",
             _sales_hypothesis(company=company, signals=signals, metric=latest_metric),
             "",
-            "## Recommended first approach",
+            "## 8. 初回アプローチ仮説",
             _first_approach(score=latest_score, signals=signals),
             "",
-            "## Evidence and source documents",
+            "## 9. 追加ヒアリングで確認すべき事項",
+            _hearing_questions(signals=signals, metric=latest_metric),
+            "",
+            "## 10. 根拠資料・根拠文",
             _evidence_section(signals=signals, documents=documents),
             "",
-            "## Caveats",
+            "## 11. 留意事項",
             _caveats_section(),
             "",
         ]
@@ -66,20 +85,24 @@ def generate_company_report(
         markdown_content=markdown,
         generation_status="generated",
         generated_at=generated_at,
-        generated_by="phase3_report_service",
+        generated_by="phase3_5_report_service",
         signal_count=len(signals),
     )
 
 
-def _executive_summary(*, company: Company, score: Score | None, signals: list[CRESignal]) -> str:
+def _executive_summary(*, company: Company, score: Score | None, signals: list[CRESignal], metric: FinancialMetric | None) -> str:
     priority = score.priority_label if score else "未評価"
     total_score = f"{score.total_score}点" if score else "未評価"
     signal_types = "、".join(dict.fromkeys(signal.signal_type for signal in signals)) or "明確なCREシグナルなし"
+    revenue_text = format_million_yen_to_oku(company.revenue)
+    capex_text = format_million_yen_to_oku(metric.capex_amount) if metric else "未登録"
     return (
-        f"{company.name}は{company.industry}の{company.market}上場サンプル企業です。"
-        f"現在のCRE営業優先度は **{priority}（{total_score}）** で、"
-        f"主な検出シグナルは **{signal_types}** です。"
-        "初回接点では、公開IR風サンプル文書の根拠に基づき、拠点・投資・働き方の変化を確認することが有効です。"
+        f"{company.name}は{company.industry}の{company.market}上場を想定した合成サンプル企業です。"
+        f"売上高は{revenue_text}、直近設備投資額は{capex_text}の設定で、"
+        f"検出シグナルは **{signal_types}** です。"
+        f"CRE営業優先度は **{priority}（{total_score}）** と判定されます。"
+        "本判定は、根拠文、財務指標、戦略イベント、CRE支援テーマへの適合度を接続したデモ用分析であり、"
+        "実際の営業活動前には公開資料・一次情報・顧客ヒアリングによる追加検証が必要です。"
     )
 
 
@@ -89,100 +112,158 @@ def _priority_section(*, score: Score | None) -> str:
     return "\n".join(
         [
             f"- 優先度: **{score.priority_label}**",
-            f"- 総合スコア: **{score.total_score}点**",
-            f"- CREシグナル: {score.signal_score}点",
-            f"- 財務余力: {score.financial_score}点",
-            f"- 戦略イベント: {score.strategic_event_score}点",
-            f"- 提案適合度: {score.fit_score}点",
-            f"- 判定理由: {score.explanation}",
+            f"- 総合スコア: **{score.total_score}点 / 100点**",
+            "- 判定閾値: 高=85点以上、中=50点以上85点未満、低=50点未満",
+            f"- 全体評点理由: {score.explanation}",
+            f"- 推奨アクション: {score.recommended_action}",
         ]
     )
+
+
+def _score_detail_section(*, score: Score | None) -> str:
+    if score is None:
+        return "- スコア内訳は未登録です。"
+    component_scores = {
+        "signal_score": score.signal_score,
+        "financial_score": score.financial_score,
+        "strategic_event_score": score.strategic_event_score,
+        "fit_score": score.fit_score,
+    }
+    details = build_component_details(component_scores=component_scores)
+    lines = []
+    for key, detail in details.items():
+        lines.append(f"- **{COMPONENT_LABELS[key]}**: {detail.score}点 / {detail.max_points}点  ")
+        lines.append(f"  - 評点理由: {detail.reason}")
+    lines.append(f"- **合計**: {sum(component_scores.values())}点 / 100点")
+    return "\n".join(lines)
 
 
 def _signals_section(*, signals: list[CRESignal], documents: list[Document]) -> str:
     if not signals:
         mock_signals = [signal for document in documents for signal in extract_cre_signals_mock(document=document)]
         if not mock_signals:
-            return "- 現時点で根拠付きCREシグナルは検出されていません。"
+            return "- 現時点で根拠付きCREシグナルは検出されていません。低信頼として継続モニタリングが妥当です。"
         return "\n".join(
-            f"- **{signal.signal_type}**: {signal.summary}（信頼度: {signal.confidence}）"
+            f"- **{signal.signal_type}**: {signal.summary}（信頼度: {signal.confidence}）。根拠が限定的なため追加確認が必要です。"
             for signal in mock_signals
         )
-    return "\n".join(
-        f"- **{signal.signal_type}**: {signal.description}（信頼度: {signal.confidence}）"
-        for signal in signals
+    lines = []
+    for signal in signals:
+        confidence_note = "営業仮説の入口として扱いやすい" if signal.confidence == "high" else "追加ヒアリングで具体化が必要"
+        lines.append(
+            f"- **{signal.signal_type}**（信頼度: {signal.confidence}）: {signal.description} "
+            f"根拠文は「{signal.evidence_text}」であり、{confidence_note}シグナルです。"
+        )
+    lines.append(
+        "- 上記シグナルは単独では断定材料ではありませんが、複数テーマが同時に確認される企業では、"
+        "拠点ポートフォリオ、投資計画、不動産コスト、BCP、脱炭素対応を横断して確認する価値があります。"
     )
+    return "\n".join(lines)
 
 
-def _financial_section(*, metric: FinancialMetric | None) -> str:
+def _financial_section(*, company: Company, metric: FinancialMetric | None) -> str:
     if metric is None:
-        return "- 財務メトリクスは未登録です。"
+        return "- 財務メトリクスは未登録です。財務余力の評価は保留してください。"
     return "\n".join(
         [
             f"- 対象年度: FY{metric.fiscal_year}",
+            f"- 売上高: {format_million_yen_to_oku(company.revenue)}",
             f"- 売上成長率: {metric.revenue_growth_pct:.1f}%",
             f"- 営業利益率: {metric.operating_margin_pct:.1f}%",
-            f"- 設備投資額: {metric.capex_amount:,}百万円",
-            f"- 現預金等: {metric.cash_and_equivalents:,}百万円",
-            f"- 観察コメント: {metric.segment_change_note}",
+            f"- 設備投資額: {format_million_yen_to_oku(metric.capex_amount)}",
+            f"- 現預金等: {format_million_yen_to_oku(metric.cash_and_equivalents)}",
+            f"- 所見: {metric.segment_change_note} 売上規模と設備投資額が大きい企業では、投資判断前の基本構想、"
+            "PM/CM体制、拠点統廃合時の移転計画、不動産ポートフォリオ最適化の検討余地が相対的に高まります。",
         ]
     )
+
+
+def _strategic_connection(*, company: Company, signals: list[CRESignal], metric: FinancialMetric | None) -> str:
+    signal_types = {signal.signal_type for signal in signals}
+    points = []
+    if {"構造改革", "資産売却", "拠点再編"} & signal_types:
+        points.append("構造改革・資本効率改善の文脈では、遊休資産の活用、売却、賃貸化、拠点統合による固定費最適化が論点になります。")
+    if {"設備投資", "建替え", "R&D拠点拡張"} & signal_types:
+        points.append("成長投資・研究開発投資の文脈では、施設基本構想、投資予算管理、工期・品質・コストを統合するPM/CM支援が接続しやすいと考えられます。")
+    if {"脱炭素", "BCP", "物流再編"} & signal_types:
+        points.append("サステナビリティ、BCP、物流効率化の文脈では、拠点配置、エネルギー性能、バックアップ拠点、配送網の再設計を一体で確認する必要があります。")
+    if metric and metric.cash_and_equivalents >= 300_000:
+        points.append("現預金等の設定が相対的に厚く、投資余力や財務安全性を踏まえた中長期CREロードマップ提案の余地があります。")
+    if not points:
+        points.append("現時点のシグナルは限定的であるため、中期経営計画の更新、主要拠点投資、組織再編の有無を継続的に確認する段階です。")
+    return "\n".join(f"- {company.name}: {point}" for point in points)
 
 
 def _sales_hypothesis(*, company: Company, signals: list[CRESignal], metric: FinancialMetric | None) -> str:
     signal_types = {signal.signal_type for signal in signals}
     hypotheses = []
-    if {"拠点再編", "物流再編", "海外展開"} & signal_types:
-        hypotheses.append("拠点ポートフォリオ再配置や新規拠点整備の検討余地がある。")
+    if {"拠点再編", "物流再編", "海外展開", "BCP"} & signal_types:
+        hypotheses.append("国内外拠点ポートフォリオ診断、物流・営業・生産拠点の再配置シナリオ策定")
     if {"働き方改革", "本社機能見直し"} & signal_types:
-        hypotheses.append("本社・オフィス機能の最適化、集約、面積見直しの検討余地がある。")
-    if {"設備投資", "資産売却"} & signal_types:
-        hypotheses.append("投資計画や保有資産見直しと連動したCRE戦略テーマがある。")
-    if metric and metric.capex_amount >= 100_000:
-        hypotheses.append("設備投資額が大きく、投資前後の施設計画・不動産コスト管理を提案できる可能性がある。")
+        hypotheses.append("本社・オフィス機能の集約、面積最適化、ハイブリッドワーク前提のワークプレイス戦略")
+    if {"設備投資", "建替え", "R&D拠点拡張"} & signal_types:
+        hypotheses.append("大型投資・建替え・R&D拠点整備に対する基本構想、PM/CM、コスト・スケジュール管理")
+    if {"資産売却", "構造改革"} & signal_types:
+        hypotheses.append("遊休資産・低稼働資産の棚卸し、売却/賃貸/再開発の比較検討、ROIC改善に向けたCRE施策")
+    if {"脱炭素"} & signal_types:
+        hypotheses.append("保有施設の省エネ診断、ZEB/再エネ導入ロードマップ、脱炭素投資とCRE投資計画の統合")
+    if metric and metric.capex_amount >= 120_000:
+        hypotheses.append("設備投資額の大きさを踏まえた投資前レビュー、プロジェクトガバナンス、発注者支援")
     if not hypotheses:
-        hypotheses.append("既存シグナルは限定的なため、経営課題ヒアリングを通じてCRE論点を確認する。")
-    return "\n".join(f"- {company.name}では{hypothesis}" for hypothesis in hypotheses)
+        hypotheses.append("現時点ではCREテーマの顕在度が低いため、公開資料更新時のモニタリングと初期ヒアリング設計")
+    return "\n".join(f"- {theme}" for theme in dict.fromkeys(hypotheses))
 
 
 def _first_approach(*, score: Score | None, signals: list[CRESignal]) -> str:
-    if score is not None:
-        base_action = score.recommended_action
-    else:
-        base_action = "IR文書の根拠を提示し、CRE課題の有無を確認する。"
+    base_action = score.recommended_action if score is not None else "IR文書の根拠を提示し、CRE課題の有無を確認する。"
     top_signal = signals[0].signal_type if signals else "CRE戦略"
     return "\n".join(
         [
             f"- 初回面談では「{top_signal}」を入口テーマとして、経営企画・総務・不動産管掌部門に仮説を提示する。",
             f"- 推奨アクション: {base_action}",
-            "- 提案資料では、根拠テキスト、想定インパクト、確認したい論点を1枚に整理する。",
+            "- 提案資料では、根拠テキスト、財務・投資余力、想定CREテーマ、確認したい論点を1枚に整理する。",
+            "- 断定的な提案ではなく、『公開情報ベースの仮説』として提示し、現在の検討状況と担当部門を確認する。",
         ]
     )
 
 
+def _hearing_questions(*, signals: list[CRESignal], metric: FinancialMetric | None) -> str:
+    questions = [
+        "- 中期経営計画、構造改革、資本効率改善施策の中で、拠点・不動産に関するKPIや意思決定テーマはあるか。",
+        "- 主要拠点の稼働率、老朽化、BCP、脱炭素対応、更新投資の優先順位はどのように整理されているか。",
+        "- CRE、不動産、総務、経営企画、事業部門、財務部門の役割分担と意思決定プロセスはどうなっているか。",
+    ]
+    if any(signal.signal_type in {"設備投資", "建替え", "R&D拠点拡張"} for signal in signals):
+        questions.append("- 大型投資案件について、基本構想、予算管理、発注方式、PM/CM体制に外部支援余地はあるか。")
+    if metric and metric.cash_and_equivalents >= 300_000:
+        questions.append("- 投資余力をどの領域に振り向ける方針か、CRE投資と事業投資の優先順位は整理されているか。")
+    return "\n".join(questions)
+
+
 def _evidence_section(*, signals: list[CRESignal], documents: list[Document]) -> str:
     signal_lines = [
-        f"- {signal.signal_type}: \"{signal.evidence_text}\"  \n  出典: {signal.source_reference}"
+        f"- {signal.signal_type}: 「{signal.evidence_text}」  \n  出典: {signal.source_reference} / 信頼度: {signal.confidence}"
         for signal in signals
     ]
     document_lines = [
         f"- 文書ID {document.id}: {document.title} / {document.source_name} / "
-        f"{document.published_date.isoformat() if document.published_date else '日付未設定'}"
+        f"{document.published_date.isoformat() if document.published_date else '日付未設定'} / サンプル: {document.is_sample}"
         for document in documents
     ]
     if not signal_lines:
         signal_lines = ["- 根拠付きCREシグナルは未登録です。"]
     if not document_lines:
         document_lines = ["- 参照文書は未登録です。"]
-    return "\n".join(["### 根拠テキスト", *signal_lines, "", "### 参照文書", *document_lines])
+    return "\n".join(["### 根拠文", *signal_lines, "", "### 参照資料", *document_lines])
 
 
 def _caveats_section() -> str:
     return "\n".join(
         [
-            "- 本レポートはデモ用のサンプルデータまたは公開IR文書を前提に生成しています。",
-            "- 実在企業の投資判断、与信判断、法務判断を目的としたものではありません。",
-            "- 根拠が不足するシグナルは低信頼として扱い、営業時には一次情報で再確認してください。",
+            "- 本レポートはデモ用の合成サンプルデータまたは公開情報ベースの文書を前提に生成しています。",
+            "- 企業名、財務数値、シグナルはデモ品質確認用であり、実在企業の開示や営業先情報を示すものではありません。",
+            "- 実際の営業活動、投資判断、与信判断、法務判断の前には、最新の有価証券報告書、統合報告書、決算説明資料、顧客ヒアリングで追加検証してください。",
+            "- 根拠が不足するシグナルは低信頼として扱い、断定ではなく仮説として提示してください。",
             "- OpenAI APIモードを利用する場合も、APIキーはバックエンド環境変数でのみ管理し、フロントエンドには露出しません。",
         ]
     )
