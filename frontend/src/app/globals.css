@@ -412,6 +412,13 @@ h4 {
   letter-spacing: -0.05em;
 }
 
+.score-breakdown__total span {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
 .score-bars {
   display: grid;
   gap: 13px;
@@ -437,6 +444,13 @@ h4 {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-dark));
   border-radius: inherit;
+}
+
+.score-bar__reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .recommendation-box p:last-child,

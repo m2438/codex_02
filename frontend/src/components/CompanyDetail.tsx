@@ -4,8 +4,12 @@ import { ScoreBreakdown } from './ScoreBreakdown';
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 
-function formatYenMillions(value: number): string {
-  return `${numberFormatter.format(value)}百万円`;
+function formatMillionYenToOku(value: number): string {
+  const oku = value / 100;
+  if (oku >= 10000) {
+    return `${(oku / 10000).toFixed(1)}兆円`;
+  }
+  return `${numberFormatter.format(Math.round(oku))}億円`;
 }
 
 function formatDateTime(value: string): string {
@@ -43,7 +47,7 @@ export function CompanyDetail({ detail, report }: CompanyDetailProps) {
         <div className="profile-grid">
           <div><span>本社</span><strong>{company.headquarters_location}</strong></div>
           <div><span>従業員数</span><strong>{numberFormatter.format(company.employee_count)}人</strong></div>
-          <div><span>売上高（{company.fiscal_year}）</span><strong>{formatYenMillions(company.revenue)}</strong></div>
+          <div><span>売上高（{company.fiscal_year}）</span><strong>{formatMillionYenToOku(company.revenue)}</strong></div>
         </div>
       </div>
 
@@ -61,8 +65,8 @@ export function CompanyDetail({ detail, report }: CompanyDetailProps) {
               <div className="financial-grid">
                 <div><span>売上成長率</span><strong>{metrics.revenue_growth_pct.toFixed(1)}%</strong></div>
                 <div><span>営業利益率</span><strong>{metrics.operating_margin_pct.toFixed(1)}%</strong></div>
-                <div><span>設備投資額</span><strong>{formatYenMillions(metrics.capex_amount)}</strong></div>
-                <div><span>現預金等</span><strong>{formatYenMillions(metrics.cash_and_equivalents)}</strong></div>
+                <div><span>設備投資額</span><strong>{formatMillionYenToOku(metrics.capex_amount)}</strong></div>
+                <div><span>現預金等</span><strong>{formatMillionYenToOku(metrics.cash_and_equivalents)}</strong></div>
               </div>
               <p className="note-box">{metrics.segment_change_note}</p>
             </>

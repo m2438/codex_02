@@ -59,15 +59,19 @@ export type CRESignal = {
   extracted_by: string;
 };
 
+export type ScoreComponentKey = 'signal_score' | 'financial_score' | 'strategic_event_score' | 'fit_score';
+
+export type ScoreComponentDetail = {
+  score: number;
+  max_points: number;
+  reason: string;
+};
+
 export type ScoreBreakdownResponse = {
   total_score: number;
   priority_label: PriorityLabel;
-  component_scores: {
-    signal_score: number;
-    financial_score: number;
-    strategic_event_score: number;
-    fit_score: number;
-  };
+  component_scores: Record<ScoreComponentKey, number>;
+  component_details: Record<ScoreComponentKey, ScoreComponentDetail>;
   explanation: string;
   recommended_action: string;
   calculated_at: string;
