@@ -92,6 +92,7 @@ export type DocumentSummary = {
   source_name: string;
   source_url: string | null;
   source_note: string;
+  document_language: string;
   retrieved_at: string | null;
   published_date: string | null;
   fiscal_year: string;
@@ -106,6 +107,29 @@ export type CompanyDetailResponse = {
   documents: DocumentSummary[];
 };
 
+export type StructuredReportSection = {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  items: string[];
+};
+
+export type StructuredScoreComponent = {
+  label: string;
+  score_text: string;
+  details: string[];
+};
+
+export type StructuredReport = {
+  title: string;
+  disclaimer: string;
+  sections: StructuredReportSection[];
+  score_components: StructuredScoreComponent[];
+  documents: Array<Record<string, unknown>>;
+  signals: Array<Record<string, unknown>>;
+};
+
 export type CompanyReportResponse = {
   company_id: number;
   title: string;
@@ -115,4 +139,5 @@ export type CompanyReportResponse = {
   signal_count: number;
   preview: string;
   markdown_content: string;
+  structured_report?: StructuredReport;
 };

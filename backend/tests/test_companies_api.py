@@ -9,8 +9,8 @@ def test_companies_list_response_format() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] == 30
-    assert len(payload["items"]) == 30
+    assert payload["total"] == 10
+    assert len(payload["items"]) == 10
 
     first_company = payload["items"][0]
     assert {
@@ -40,25 +40,18 @@ def test_company_signals_include_evidence_and_source_reference() -> None:
         assert signal["confidence"] in {"high", "medium", "low"}
 
 
-def test_seed_companies_use_demo_names_and_multiple_high_priority_candidates() -> None:
+def test_seed_data_does_not_include_synthetic_companies() -> None:
     with TestClient(app) as client:
         response = client.get("/api/companies")
 
     assert response.status_code == 200
-    items = [item for item in response.json()["items"] if item["data_source_type"] == "synthetic"]
-    assert all(not item["name"].startswith("サンプル上場企業") for item in items)
-    assert [item["name"] for item in items] == [
-        "AAA株式会社", "BBB株式会社", "CCC株式会社", "DDD株式会社", "EEE株式会社",
-        "FFF株式会社", "GGG株式会社", "HHH株式会社", "III株式会社", "JJJ株式会社",
-        "KKK株式会社", "LLL株式会社", "MMM株式会社", "NNN株式会社", "OOO株式会社",
-        "PPP株式会社", "QQQ株式会社", "RRR株式会社", "SSS株式会社", "TTT株式会社",
-    ]
-    priority_counts = {label: sum(1 for item in items if item["priority_label"] == label) for label in {"高", "中", "低"}}
-    assert 4 <= priority_counts["高"] <= 6
-    assert 8 <= priority_counts["中"] <= 10
+    items = response.json()["items"]
+    assert len(items) == 10
+    assert all(item["data_source_type"] == "public_demo" for item in items)
+    assert all(not item["ticker"].startswith("S") for item in items)
 
 
-def test_public_demo_companies_have_real_company_metadata_and_documents() -> None:
+def test_public_demo_companies_have_real_company_metadata_and_japanese_documents() -> None:
     with TestClient(app) as client:
         companies_response = client.get("/api/companies")
 
@@ -67,6 +60,7 @@ def test_public_demo_companies_have_real_company_metadata_and_documents() -> Non
     assert len(public_items) == 10
     assert all(item["ticker"] and item["market"] == "東証プライム" for item in public_items)
 
+    non_securities_document_companies = 0
     with TestClient(app) as client:
         for item in public_items:
             detail_response = client.get(f"/api/companies/{item['company_id']}")
@@ -76,10 +70,14 @@ def test_public_demo_companies_have_real_company_metadata_and_documents() -> Non
             assert detail["company"]["listing_country"] == "日本"
             assert detail["company"]["is_public_company"] is True
             assert detail["company"]["selection_reason"]
-            assert detail["documents"]
+            assert len(detail["documents"]) >= 2
+            if any("有価証券報告書" not in document["document_type"] for document in detail["documents"]):
+                non_securities_document_companies += 1
             for document in detail["documents"]:
                 assert document["source_url"].startswith("https://")
                 assert document["document_title"]
                 assert document["document_type"]
                 assert document["fiscal_year"]
                 assert document["source_note"]
+                assert document["document_language"] == "ja" or "日本語版URLは手動確認が必要" in document["source_note"]
+    assert non_securities_document_companies >= 2

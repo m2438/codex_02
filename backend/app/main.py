@@ -83,6 +83,7 @@ def report_response(report: CompanyReportResult) -> dict[str, object]:
         "signal_count": report.signal_count,
         "preview": preview,
         "markdown_content": report.markdown_content,
+        "structured_report": report.structured_report,
     }
 
 def signal_response(signal: CRESignal) -> dict[str, object]:
@@ -207,6 +208,7 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
                 "source_name": document.source_name,
                 "source_url": document.source_url,
                 "source_note": document.source_note,
+                "document_language": document.document_language,
                 "retrieved_at": document.retrieved_at.isoformat() if document.retrieved_at else None,
                 "published_date": document.published_date.isoformat() if document.published_date else None,
                 "fiscal_year": document.fiscal_year,

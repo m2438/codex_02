@@ -43,6 +43,7 @@ class Document(Base):
     source_name: Mapped[str] = mapped_column(String(120), default="サンプルIR文書")
     retrieved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source_note: Mapped[str] = mapped_column(Text, default="")
+    document_language: Mapped[str] = mapped_column(String(20), default="ja")
     published_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     fiscal_year: Mapped[str] = mapped_column(String(16))
     text_content: Mapped[str] = mapped_column(Text)
