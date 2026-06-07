@@ -75,7 +75,7 @@ def generate_company_report(
             _evidence_section(signals=signals, documents=documents),
             "",
             "## 11. 留意事項",
-            _caveats_section(),
+            _caveats_section(company=company),
             "",
         ]
     )
@@ -85,7 +85,7 @@ def generate_company_report(
         markdown_content=markdown,
         generation_status="generated",
         generated_at=generated_at,
-        generated_by="phase3_5_report_service",
+        generated_by="phase4a_report_service",
         signal_count=len(signals),
     )
 
@@ -96,6 +96,15 @@ def _executive_summary(*, company: Company, score: Score | None, signals: list[C
     signal_types = "、".join(dict.fromkeys(signal.signal_type for signal in signals)) or "明確なCREシグナルなし"
     revenue_text = format_million_yen_to_oku(company.revenue)
     capex_text = format_million_yen_to_oku(metric.capex_amount) if metric else "未登録"
+    if company.data_source_type == "public_demo":
+        return (
+            f"{company.name}は{company.industry}の{company.market}上場企業であり、本レポートは公開IR資料に基づく営業仮説です。"
+            f"売上高は{revenue_text}、直近設備投資額は{capex_text}としてスコアリング入力に正規化しています。"
+            f"公開情報から読み取れるCRE関連の確認候補は **{signal_types}** です。"
+            f"営業優先度はスコアリングロジックに基づき **{priority}（{total_score}）** と算定されますが、"
+            "これは当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。"
+            "実営業では一次情報、個別不動産情報、顧客ヒアリングによる追加検証が必要です。"
+        )
     return (
         f"{company.name}は{company.industry}の{company.market}上場を想定した合成サンプル企業です。"
         f"売上高は{revenue_text}、直近設備投資額は{capex_text}の設定で、"
@@ -116,6 +125,7 @@ def _priority_section(*, score: Score | None) -> str:
             "- 判定閾値: 高=85点以上、中=50点以上85点未満、低=50点未満",
             f"- 全体評点理由: {score.explanation}",
             f"- 推奨アクション: {score.recommended_action}",
+            "- 実在企業デモの場合: 公開情報から読み取れる事実、CRE観点での仮説、追加確認事項を分けて扱います。",
         ]
     )
 
@@ -155,8 +165,8 @@ def _signals_section(*, signals: list[CRESignal], documents: list[Document]) -> 
             f"根拠文は「{signal.evidence_text}」であり、{confidence_note}シグナルです。"
         )
     lines.append(
-        "- 上記シグナルは単独では断定材料ではありませんが、複数テーマが同時に確認される企業では、"
-        "拠点ポートフォリオ、投資計画、不動産コスト、BCP、脱炭素対応を横断して確認する価値があります。"
+        "- 上記シグナルは単独では断定材料ではありません。公開情報からはCRE需要の可能性が示唆されるにとどまり、"
+        "拠点ポートフォリオ、投資計画、不動産コスト、BCP、脱炭素対応の実態は追加確認が必要です。"
     )
     return "\n".join(lines)
 
@@ -247,7 +257,9 @@ def _evidence_section(*, signals: list[CRESignal], documents: list[Document]) ->
     ]
     document_lines = [
         f"- 文書ID {document.id}: {document.title} / {document.source_name} / "
-        f"{document.published_date.isoformat() if document.published_date else '日付未設定'} / サンプル: {document.is_sample}"
+        f"{document.published_date.isoformat() if document.published_date else '日付未設定'} / サンプル: {document.is_sample}  "
+        f"\n  URL: {document.source_url or 'なし'}  "
+        f"\n  備考: {document.source_note or 'なし'}"
         for document in documents
     ]
     if not signal_lines:
@@ -257,13 +269,26 @@ def _evidence_section(*, signals: list[CRESignal], documents: list[Document]) ->
     return "\n".join(["### 根拠文", *signal_lines, "", "### 参照資料", *document_lines])
 
 
-def _caveats_section() -> str:
+def _caveats_section(*, company: Company) -> str:
+    common = [
+        "- 本レポートは営業デモ用であり、投資判断、与信判断、法務判断を目的としたものではありません。",
+        "- 実際の営業活動前には、最新の有価証券報告書、統合報告書、決算説明資料、顧客ヒアリングで追加検証してください。",
+        "- 根拠が不足するシグナルは低信頼として扱い、断定ではなく仮説として提示してください。",
+        "- OpenAI APIモードを利用する場合も、APIキーはバックエンド環境変数でのみ管理し、フロントエンドには露出しません。",
+    ]
+    if company.data_source_type == "public_demo":
+        return "\n".join(
+            [
+                "- 本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。",
+                "- 個別不動産の状況、投資意思決定、担当部門、検討時期は公開資料のみでは確認できないため、一次情報の再確認および個別ヒアリングが必要です。",
+                "- 企業の経営状態や保有不動産に関する記述は、公開資料から確認できる範囲の事実とCRE観点の仮説を分けて扱ってください。",
+                *common,
+            ]
+        )
     return "\n".join(
         [
             "- 本レポートはデモ用の合成サンプルデータまたは公開情報ベースの文書を前提に生成しています。",
             "- 企業名、財務数値、シグナルはデモ品質確認用であり、実在企業の開示や営業先情報を示すものではありません。",
-            "- 実際の営業活動、投資判断、与信判断、法務判断の前には、最新の有価証券報告書、統合報告書、決算説明資料、顧客ヒアリングで追加検証してください。",
-            "- 根拠が不足するシグナルは低信頼として扱い、断定ではなく仮説として提示してください。",
-            "- OpenAI APIモードを利用する場合も、APIキーはバックエンド環境変数でのみ管理し、フロントエンドには露出しません。",
+            *common,
         ]
     )

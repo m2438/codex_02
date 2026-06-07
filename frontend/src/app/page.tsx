@@ -2,10 +2,15 @@ import { CompanyDetail } from '@/components/CompanyDetail';
 import { CompanyRankTable } from '@/components/CompanyRankTable';
 import { MetricCard } from '@/components/MetricCard';
 import { getCompanies, getCompanyDetail, getCompanyReport, getHealth } from '@/lib/api';
-import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, PriorityLabel } from '@/types/api';
+import type { CompanyDetailResponse, CompanyReportResponse, CompanySummary, DataSourceType, PriorityLabel } from '@/types/api';
 
 const priorityOrder: Record<string, number> = { 高: 3, 中: 2, 低: 1, 未評価: 0 };
 const priorityOptions: Array<PriorityLabel | 'すべて'> = ['すべて', '高', '中', '低'];
+const dataSourceOptions: Array<{ value: DataSourceType | 'すべて'; label: string }> = [
+  { value: 'すべて', label: 'すべて' },
+  { value: 'synthetic', label: '合成デモデータ' },
+  { value: 'public_demo', label: '実在企業デモデータ' }
+];
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -45,13 +50,15 @@ export default async function Home({ searchParams }: HomeProps) {
   const companies = companiesResponse?.items ?? [];
   const selectedIndustry = firstParam(searchParams?.industry) ?? 'すべて';
   const selectedPriority = (firstParam(searchParams?.priority) ?? 'すべて') as PriorityLabel | 'すべて';
+  const selectedDataSource = (firstParam(searchParams?.dataSource) ?? 'すべて') as DataSourceType | 'すべて';
   const selectedCompanyIdParam = Number(firstParam(searchParams?.companyId));
 
   const industries = ['すべて', ...Array.from(new Set(companies.map((company) => company.industry))).sort((a, b) => a.localeCompare(b, 'ja'))];
   const filteredCompanies = sortCompanies(companies).filter((company) => {
     const industryMatches = selectedIndustry === 'すべて' || company.industry === selectedIndustry;
     const priorityMatches = selectedPriority === 'すべて' || company.priority_label === selectedPriority;
-    return industryMatches && priorityMatches;
+    const dataSourceMatches = selectedDataSource === 'すべて' || company.data_source_type === selectedDataSource;
+    return industryMatches && priorityMatches && dataSourceMatches;
   });
   const selectedCompany = filteredCompanies.find((company) => company.company_id === selectedCompanyIdParam) ?? filteredCompanies[0];
   const [selectedDetail, selectedReport, latestUpdatedAt]: [
@@ -65,6 +72,7 @@ export default async function Home({ searchParams }: HomeProps) {
   ]);
 
   const highPriorityCount = companies.filter((company) => company.priority_label === '高').length;
+  const publicDemoCount = companies.filter((company) => company.data_source_type === 'public_demo').length;
   const modeLabel = health?.mode === 'openai' ? 'OpenAI APIモード' : 'モックモード';
 
   return (
@@ -75,18 +83,18 @@ export default async function Home({ searchParams }: HomeProps) {
             <p className="eyebrow">CRE CONSULTING SALES DEMO</p>
             <h1>CRE Sales Intelligence Dashboard</h1>
             <p className="description">
-              Phase 1 APIのサンプル企業・CREシグナル・スコアを利用し、CREコンサルティング営業の優先順位と提案仮説を日本語で確認するダッシュボードです。
+              合成デモデータと日本国内の実在上場企業の公開情報ベースデモを比較し、CREコンサルティング営業の優先順位と提案仮説を日本語で確認するダッシュボードです。
             </p>
           </div>
           <div className="hero-status">
-            <span className="badge">Phase 2: フロントエンドダッシュボード</span>
+            <span className="badge">Phase 4A: 実在企業デモ対応</span>
             <span className="connection">バックエンド: {health?.status === 'ok' ? '接続済み' : '未接続'} / {modeLabel}</span>
           </div>
         </section>
 
         <section className="metric-grid" aria-label="ダッシュボード指標">
-          <MetricCard label="対象企業数" value={`${companiesResponse?.total ?? 0}社`} helper="Phase 1シードデータ" tone="primary" />
-          <MetricCard label="高優先度企業" value={`${highPriorityCount}社`} helper="優先度ラベルが「高」の企業" tone="success" />
+          <MetricCard label="対象企業数" value={`${companiesResponse?.total ?? 0}社`} helper="合成データ＋公開情報ベース" tone="primary" />
+          <MetricCard label="実在企業デモ" value={`${publicDemoCount}社`} helper="公開IR資料に基づく営業仮説" tone="success" />
           <MetricCard label="最新更新" value={formatDateTime(latestUpdatedAt)} helper="スコア計算時刻（JST）" />
         </section>
 
@@ -109,6 +117,12 @@ export default async function Home({ searchParams }: HomeProps) {
                   {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
                 </select>
               </label>
+              <label>
+                データ種別
+                <select name="dataSource" defaultValue={selectedDataSource}>
+                  {dataSourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
               <button type="submit">絞り込み</button>
             </form>
           </div>
@@ -117,6 +131,7 @@ export default async function Home({ searchParams }: HomeProps) {
             selectedCompanyId={selectedCompany?.company_id}
             industry={selectedIndustry === 'すべて' ? undefined : selectedIndustry}
             priority={selectedPriority}
+            dataSource={selectedDataSource}
           />
         </section>
 

@@ -12,9 +12,12 @@ def test_company_detail_response_format() -> None:
 
     assert payload["company"]["company_id"] == 1
     assert payload["company"]["name"]
+    assert payload["company"]["data_source_type"] in {"synthetic", "public_demo"}
     assert payload["latest_financial_metrics"]["fiscal_year"] == "2025"
     assert payload["cre_signals"]
     assert payload["documents"]
+    assert "document_title" in payload["documents"][0]
+    assert "source_url" in payload["documents"][0]
 
     score = payload["score_breakdown"]
     assert score["total_score"] == sum(score["component_scores"].values())

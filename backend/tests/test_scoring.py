@@ -51,3 +51,22 @@ def test_scoring_returns_explainable_component_scores() -> None:
         assert detail.reason
     assert "テスト株式会社" in result.explanation
     assert result.recommended_action
+
+
+def test_public_demo_scores_are_calculated_from_scoring_logic() -> None:
+    from app.seed import PUBLIC_COMPANY_SEEDS
+
+    for seed in PUBLIC_COMPANY_SEEDS:
+        result = calculate_sales_priority_score(
+            company_name=seed["name"],
+            financial=FinancialInputs(
+                revenue=seed["revenue"],
+                revenue_growth_pct=seed["growth"],
+                operating_margin_pct=seed["margin"],
+                capex_amount=seed["capex"],
+                cash_and_equivalents=seed["cash"],
+            ),
+            signals=[SignalInputs(signal_type=signal["type"], confidence=signal["confidence"]) for signal in seed["signals"]],
+        )
+        assert result.priority_label == priority_label(result.total_score)
+        assert result.total_score == sum(result.component_scores.values())
