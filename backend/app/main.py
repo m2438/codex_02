@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
-from app.models import CRESignal, Company, FinancialMetric, Score
+from app.models import CRESignal, Company, FinancialMetric, Report, Score
 from app.seed import seed_database
+from app.services.reporting import CompanyReportResult, generate_company_report
 
 settings = get_settings()
 
@@ -62,6 +63,20 @@ def score_response(score: Score | None) -> dict[str, object] | None:
         "calculated_at": score.calculated_at.isoformat(),
     }
 
+
+
+def report_response(report: CompanyReportResult) -> dict[str, object]:
+    preview = report.markdown_content[:600]
+    return {
+        "company_id": report.company_id,
+        "title": report.title,
+        "generation_status": report.generation_status,
+        "generated_at": report.generated_at.isoformat(),
+        "generated_by": report.generated_by,
+        "signal_count": report.signal_count,
+        "preview": preview,
+        "markdown_content": report.markdown_content,
+    }
 
 def signal_response(signal: CRESignal) -> dict[str, object]:
     return {
@@ -203,3 +218,45 @@ def get_company_score(company_id: int, db: Session = Depends(get_db)) -> dict[st
     if score is None:
         raise HTTPException(status_code=404, detail="Score not found")
     return {"company_id": company_id, **score}
+
+
+@app.get("/api/companies/{company_id}/report")
+def get_company_report(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    company = (
+        db.query(Company)
+        .options(
+            selectinload(Company.documents),
+            selectinload(Company.financial_metrics),
+            selectinload(Company.cre_signals),
+            selectinload(Company.scores),
+            selectinload(Company.reports),
+        )
+        .filter(Company.id == company_id)
+        .first()
+    )
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    generated_report = generate_company_report(
+        company=company,
+        latest_metric=latest_financial_metric(company),
+        latest_score=latest_score(company),
+    )
+    latest_stored_report = max(company.reports, key=lambda report: report.created_at, default=None)
+    if latest_stored_report is None:
+        db.add(
+            Report(
+                company_id=company.id,
+                title=generated_report.title,
+                markdown_content=generated_report.markdown_content,
+                generated_by=generated_report.generated_by,
+                created_at=generated_report.generated_at,
+            )
+        )
+    else:
+        latest_stored_report.title = generated_report.title
+        latest_stored_report.markdown_content = generated_report.markdown_content
+        latest_stored_report.generated_by = generated_report.generated_by
+        latest_stored_report.created_at = generated_report.generated_at
+    db.commit()
+    return report_response(generated_report)
