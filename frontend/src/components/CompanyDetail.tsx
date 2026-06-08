@@ -17,7 +17,7 @@ const defaultFinancialScales: FinancialMetricScales = {
 };
 
 function dataSourceLabel(value: 'synthetic' | 'public_demo'): string {
-  return value === 'public_demo' ? '公開情報ベース' : '合成デモデータ';
+  return value === 'public_demo' ? '公開IR情報' : '参考データ';
 }
 
 function languageLabel(value?: string): string {
@@ -142,7 +142,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
     <section className="detail-panel">
       <div className="panel detail-panel__header">
         <div>
-          <p className="section-kicker">企業詳細</p>
+          <p className="section-kicker">1. 企業を選択</p>
           <h2>{company.name}</h2>
           <p className="detail-panel__subtitle">{company.ticker} / {company.market} / {company.industry} / EDINET: {company.edinet_code ?? '未登録'}</p>
           <span className={`data-source-badge data-source-badge--${company.data_source_type}`}>{dataSourceLabel(company.data_source_type)}</span>
@@ -154,13 +154,11 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         </div>
       </div>
 
-      <IRPipelinePanel companyId={company.company_id} initialStatus={detail.pipeline_status} onRefresh={refreshCompanyData} />
-
       <div className="detail-grid">
         <div className="panel">
           <div className="section-heading">
             <div>
-              <p className="section-kicker">財務関連指標</p>
+              <p className="section-kicker">2. 財務関連指標</p>
               <h3>投資余力と事業変化</h3>
             </div>
             {metrics ? <span className="pill">FY{metrics.fiscal_year}</span> : null}
@@ -209,10 +207,12 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         </div>
       </div>
 
+      <IRPipelinePanel companyId={company.company_id} initialStatus={detail.pipeline_status} onRefresh={refreshCompanyData} />
+
       <div className="panel report-panel">
         <div className="section-heading">
           <div>
-            <p className="section-kicker">分析レポート</p>
+            <p className="section-kicker">6. 分析レポート</p>
             <h3>企業別CRE営業仮説レポート</h3>
           </div>
           <span className={`pill report-status report-status--${report?.generation_status ?? 'not_generated'}`}>
@@ -262,9 +262,9 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
             </div>
           </div>
         ) : report ? (
-          <p className="empty-state">構造化レポートを取得できませんでした。バックエンドのレポートAPI設定を確認してください。</p>
+          <p className="empty-state">分析レポートの表示に必要な構造化データを取得できませんでした。少し時間を置いて再読み込みしてください。</p>
         ) : (
-          <p className="empty-state">レポートはまだ生成されていません。バックエンドのレポートAPI接続状態を確認してください。</p>
+          <p className="empty-state">分析レポートはまだ生成されていません。「分析実行」後にこの欄へ章立てで表示されます。</p>
         )}
       </div>
 
@@ -284,7 +284,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
       <div className="panel documents-panel">
         <div className="section-heading">
           <div>
-            <p className="section-kicker">根拠資料</p>
+            <p className="section-kicker">7. 根拠資料</p>
             <h3>参照IR資料・出典URL</h3>
           </div>
           <span className="pill">{detail.documents.length}件</span>
@@ -295,7 +295,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
               <h4>{document.document_title ?? document.title}</h4>
               <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name} / 言語: {languageLabel(document.document_language)}</p>
               {document.source_url?.startsWith('http') ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : document.external_doc_id ? <span>EDINET docID: {document.external_doc_id}</span> : <span>URLなし</span>}
-              <small>取得: {document.fetched_file_path ? '保存済み' : '未保存'} / 抽出: {document.extracted_text_path ? '抽出済み' : '未抽出'}</small>
+              <small>取得状況: {document.fetched_file_path ? '資料取得済み' : '未取得'} / 本文抽出: {document.extracted_text_path ? '抽出済み' : '未抽出'}</small>
             </article>
           ))}
         </div>

@@ -31,7 +31,7 @@ a {
 
 main {
   min-height: 100vh;
-  padding: 40px 24px 64px;
+  padding: 28px 20px 48px;
 }
 
 .container {
@@ -41,7 +41,7 @@ main {
 
 .dashboard {
   display: grid;
-  gap: 24px;
+  gap: 12px;
 }
 
 .hero,
@@ -50,7 +50,7 @@ main {
 .signal-card {
   background: rgb(255 255 255 / 94%);
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
 }
 
@@ -116,7 +116,7 @@ h4 {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 
 .badge,
@@ -191,15 +191,15 @@ h4 {
 }
 
 .panel {
-  padding: 28px;
+  padding: 20px;
 }
 
 .section-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  margin-bottom: 22px;
+  gap: 14px;
+  margin-bottom: 10px;
 }
 
 .filters {
@@ -257,7 +257,7 @@ h4 {
 
 .rank-table th,
 .rank-table td {
-  padding: 15px 16px;
+  padding: 11px 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: middle;
@@ -324,14 +324,14 @@ h4 {
 
 .detail-panel {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .detail-panel__header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
   align-items: center;
-  gap: 24px;
+  gap: 16px;
 }
 
 .detail-panel__subtitle {
@@ -355,7 +355,7 @@ h4 {
 .note-box,
 .evidence-box,
 .recommendation-box {
-  padding: 14px;
+  padding: 12px;
   background: var(--soft-card);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -380,8 +380,8 @@ h4 {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.75fr);
+  gap: 16px;
 }
 
 .financial-grid {
@@ -396,7 +396,7 @@ h4 {
 
 .score-breakdown {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 
 .score-breakdown__summary {
@@ -407,7 +407,7 @@ h4 {
 
 .score-breakdown__total {
   margin-bottom: 0;
-  font-size: 44px;
+  font-size: 36px;
   font-weight: 950;
   letter-spacing: -0.05em;
 }
@@ -421,7 +421,7 @@ h4 {
 
 .score-bars {
   display: grid;
-  gap: 13px;
+  gap: 10px;
 }
 
 .score-bar__label-row {
@@ -460,7 +460,7 @@ h4 {
 }
 
 .signal-card {
-  padding: 20px;
+  padding: 16px;
   box-shadow: none;
 }
 
@@ -502,7 +502,7 @@ h4 {
 
 .empty-state {
   margin-bottom: 0;
-  padding: 20px;
+  padding: 14px;
   color: var(--muted);
   background: #f8fafc;
   border: 1px dashed var(--border);
@@ -614,7 +614,7 @@ h4 {
 
 .documents-panel {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 
 .document-list {
@@ -623,7 +623,7 @@ h4 {
 }
 
 .document-card {
-  padding: 14px;
+  padding: 12px;
   background: var(--soft-card);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -664,7 +664,7 @@ h4 {
 }
 
 .report-meta-card p {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   line-height: 1.8;
   font-weight: 800;
 }
@@ -703,11 +703,11 @@ h4 {
 .report-section-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .report-section {
-  padding: 18px;
+  padding: 14px;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -733,7 +733,7 @@ h4 {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .report-section__heading span {
@@ -751,7 +751,7 @@ h4 {
 .report-section ul,
 .score-component-card ul {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   padding-left: 1.1rem;
 }
@@ -760,7 +760,7 @@ h4 {
 .report-section p,
 .score-component-card li {
   color: #334155;
-  line-height: 1.75;
+  line-height: 1.65;
 }
 
 .score-component-grid {
@@ -827,7 +827,7 @@ h4 {
 }
 
 .financial-metric-card {
-  padding: 14px;
+  padding: 12px;
   background: var(--soft-card);
   border: 1px solid var(--border);
   border-radius: 14px;

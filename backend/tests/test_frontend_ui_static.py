@@ -77,7 +77,7 @@ def test_caveats_section_uses_compact_caution_class() -> None:
 def test_phase4b_panel_copy_removed_and_operation_panel_label_used() -> None:
     panel = read("frontend/src/components/IRPipelinePanel.tsx")
     assert "Phase 4B 操作パネル" not in panel
-    assert "<h3>操作パネル</h3>" in panel
+    assert "<h3>次に行う操作</h3>" in panel
     assert "公開情報に基づく営業仮説生成用です。企業IRサイト全体のクロールは行いません。" not in panel
 
 
@@ -113,3 +113,50 @@ def test_edinet_button_removed_and_edinet_docid_shown_without_url_link() -> None
     assert "postEdinetFetch" not in panel
     assert "document.source_url?.startsWith('http')" in detail
     assert "EDINET docID" in detail
+
+
+def test_phase5_demo_flow_copy_and_operation_panel_are_business_oriented() -> None:
+    detail = read("frontend/src/components/CompanyDetail.tsx")
+    panel = read("frontend/src/components/IRPipelinePanel.tsx")
+    score = read("frontend/src/components/ScoreBreakdown.tsx")
+    assert "1. 企業を選択" in detail
+    assert "2. 財務関連指標" in detail
+    assert "3. 営業優先度スコア" in score
+    assert "4. 資料取得を実行" in panel
+    assert "5. 分析実行" in panel
+    assert "6. 分析レポート" in detail
+    assert "7. 根拠資料" in detail
+    assert "次に行う操作" in panel
+    assert "Phase 4B" not in panel
+    assert "dry-runです" not in panel
+
+
+def test_frontend_error_messages_are_sanitized_for_sales_demo() -> None:
+    panel = read("frontend/src/components/IRPipelinePanel.tsx")
+    main = read("backend/app/main.py")
+    fetcher = read("backend/app/services/ir_document_fetcher.py")
+    extractor = read("backend/app/services/document_text_extractor.py")
+    assert "資料取得の確認事項" in panel
+    assert "分析実行の確認事項" in panel
+    assert "sanitize_user_message" in main
+    assert "sk-" in main
+    assert "認証情報は画面には表示していません" in main
+    assert "資料PDFを取得できませんでした" in fetcher
+    assert "PDF本文を抽出できませんでした" in extractor
+    assert "fetch failed" not in panel
+    assert "/workspace/" not in panel
+
+
+def test_report_keeps_required_sections_without_internal_phase_labels() -> None:
+    reporting = read("backend/app/services/reporting.py")
+    for title in [
+        "エグゼクティブサマリー",
+        "CRE営業優先度の判定",
+        "スコア内訳と評点理由",
+        "CRE需要兆候の詳細分析",
+        "財務・投資余力に関する所見",
+        "根拠資料・根拠文",
+    ]:
+        assert title in reporting
+    assert "phase4a_report_service" not in reporting
+    assert "Phase 4B" not in reporting
