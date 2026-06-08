@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from app.models import Company
+from app.services.ir_document_fetcher import DOWNLOAD_CHUNK_SIZE, FileSizeLimitExceededError
 from app.services.ir_settings import IRPipelineSettings
 
 EDINET_LIST_URL = "https://disclosure.edinet-fsa.go.jp/api/v2/documents.json"
@@ -79,6 +80,8 @@ class EdinetClient:
             return self._result(company, start, end, days, document_type, doc_id, "success", saved_path=str(saved_path))
         except HTTPError as exc:
             return self._result(company, start, end, days, document_type, None, "failed", f"EDINET API HTTPエラー: {exc.code} {exc.reason}")
+        except FileSizeLimitExceededError as exc:
+            return self._result(company, start, end, days, document_type, None, "failed", str(exc))
         except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
             return self._result(company, start, end, days, document_type, None, "failed", f"EDINET取得エラー: {exc}")
 
@@ -108,10 +111,28 @@ class EdinetClient:
         storage_dir.mkdir(parents=True, exist_ok=True)
         query = urlencode({"type": 2, "Subscription-Key": self.settings.edinet_api_key})
         request = Request(f"{EDINET_DOCUMENT_URL.format(doc_id=doc_id)}?{query}", headers={"User-Agent": "cre-sales-intelligence-demo/0.1"})
-        with urlopen(request, timeout=30) as response:  # noqa: S310 - URL is fixed EDINET endpoint.
-            content = response.read()
         saved_path = storage_dir / f"{target_date.isoformat()}_{doc_id}.pdf"
-        saved_path.write_bytes(content)
+        max_bytes = self.settings.max_file_mb * 1024 * 1024
+        with urlopen(request, timeout=30) as response:  # noqa: S310 - URL is fixed EDINET endpoint.
+            content_length = response.headers.get("Content-Length")
+            if content_length:
+                try:
+                    advertised_size = int(content_length)
+                except ValueError:
+                    advertised_size = 0
+                if advertised_size > max_bytes:
+                    raise FileSizeLimitExceededError(self.settings.max_file_mb)
+            total = 0
+            with saved_path.open("wb") as file:
+                while True:
+                    chunk = response.read(DOWNLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > max_bytes:
+                        saved_path.unlink(missing_ok=True)
+                        raise FileSizeLimitExceededError(self.settings.max_file_mb)
+                    file.write(chunk)
         return saved_path
 
     @staticmethod

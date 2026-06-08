@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { PipelineActionResponse, PipelineStatus } from '@/types/api';
-import { postAnalyze, postDocumentFetch, postEdinetFetch } from '@/lib/api';
+import { postAnalyze, postDocumentFetch } from '@/lib/api';
 
 function formatDateTime(value?: string | null): string {
   if (!value) return '未実行';
@@ -16,36 +16,53 @@ function analysisInputLabel(value?: string | null): string {
 
 function statusLabel(value?: string | null): string {
   if (!value) return '未実行';
-  const labels: Record<string, string> = { success: '成功', failed: '失敗', skipped: 'スキップ', dry_run: 'dry-run' };
+  const labels: Record<string, string> = { success: '成功', failed: '失敗', skipped: 'スキップ', dry_run: 'dry-run', extract_failed: '取得成功・抽出失敗' };
   return labels[value] ?? value;
 }
+
+const fallbackConfig = {
+  fetch_enabled: false,
+  dry_run: true,
+  analysis_mode: 'mock',
+  effective_analysis_mode: 'mock',
+  edinet_api_key_configured: false,
+  openai_api_key_configured: false,
+  storage_dir: '',
+  edinet_lookback_days: 365
+};
 
 type Props = {
   companyId: number;
   initialStatus?: PipelineStatus;
+  onRefresh?: () => Promise<PipelineStatus | undefined>;
 };
 
-export function IRPipelinePanel({ companyId, initialStatus }: Props) {
+export function IRPipelinePanel({ companyId, initialStatus, onRefresh }: Props) {
   const [status, setStatus] = useState<PipelineStatus | undefined>(initialStatus);
   const [lastResponse, setLastResponse] = useState<PipelineActionResponse | null>(null);
   const [running, setRunning] = useState<string | null>(null);
 
-  async function runAction(kind: 'manual' | 'edinet' | 'analyze') {
+  async function runAction(kind: 'manual' | 'analyze') {
     setRunning(kind);
-    const response = kind === 'manual' ? await postDocumentFetch(companyId) : kind === 'edinet' ? await postEdinetFetch(companyId) : await postAnalyze(companyId);
-    setLastResponse(response);
-    if (response) {
-      setStatus((current) => ({
-        config: response.pipeline ?? current?.config ?? initialStatus!.config,
-        latest_fetch_at: response.latest_fetch_at ?? current?.latest_fetch_at ?? null,
-        latest_fetch_status: response.latest_fetch_status ?? current?.latest_fetch_status ?? null,
-        latest_fetch_error: response.latest_fetch_error ?? current?.latest_fetch_error ?? null,
-        latest_analysis_at: response.latest_analysis_at ?? current?.latest_analysis_at ?? null,
-        latest_analysis_status: response.latest_analysis_status ?? current?.latest_analysis_status ?? null,
-        latest_analysis_error: response.latest_analysis_error ?? current?.latest_analysis_error ?? null
-      }));
+    try {
+      const response = kind === 'manual' ? await postDocumentFetch(companyId) : await postAnalyze(companyId);
+      setLastResponse(response);
+      if (response) {
+        setStatus((current) => ({
+          config: response.pipeline ?? current?.config ?? initialStatus?.config ?? fallbackConfig,
+          latest_fetch_at: response.latest_fetch_at ?? current?.latest_fetch_at ?? null,
+          latest_fetch_status: response.latest_fetch_status ?? current?.latest_fetch_status ?? null,
+          latest_fetch_error: response.latest_fetch_error ?? current?.latest_fetch_error ?? null,
+          latest_analysis_at: response.latest_analysis_at ?? current?.latest_analysis_at ?? null,
+          latest_analysis_status: response.latest_analysis_status ?? current?.latest_analysis_status ?? null,
+          latest_analysis_error: response.latest_analysis_error ?? current?.latest_analysis_error ?? null
+        }));
+      }
+    } finally {
+      const refreshedStatus = await onRefresh?.();
+      if (refreshedStatus) setStatus(refreshedStatus);
+      setRunning(null);
     }
-    setRunning(null);
   }
 
   const config = status?.config;
@@ -56,8 +73,7 @@ export function IRPipelinePanel({ companyId, initialStatus }: Props) {
       <div className="section-heading">
         <div>
           <p className="section-kicker">IR資料取得・分析</p>
-          <h3>Phase 4B 操作パネル</h3>
-          <p className="ir-pipeline-panel__note">公開情報に基づく営業仮説生成用です。企業IRサイト全体のクロールは行いません。</p>
+          <h3>操作パネル</h3>
         </div>
         <span className={`pill ir-mode ir-mode--${config?.dry_run ? 'dry' : config?.fetch_enabled ? 'enabled' : 'disabled'}`}>{disabledMessage}</span>
       </div>
@@ -71,7 +87,6 @@ export function IRPipelinePanel({ companyId, initialStatus }: Props) {
       </div>
       <div className="ir-actions">
         <button type="button" onClick={() => runAction('manual')} disabled={Boolean(running)}>{running === 'manual' ? '取得中...' : '資料取得'}</button>
-        <button type="button" onClick={() => runAction('edinet')} disabled={Boolean(running)}>{running === 'edinet' ? '取得中...' : 'EDINET取得'}</button>
         <button type="button" onClick={() => runAction('analyze')} disabled={Boolean(running)}>{running === 'analyze' ? '分析中...' : '分析実行'}</button>
       </div>
       {(status?.latest_fetch_error || status?.latest_analysis_error || lastResponse) ? (
