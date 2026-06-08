@@ -14,6 +14,7 @@ class IRPipelineSettings:
     analysis_mode: str
     dry_run: bool
     storage_dir: Path
+    edinet_lookback_days: int
 
     @property
     def effective_analysis_mode(self) -> str:
@@ -30,6 +31,7 @@ class IRPipelineSettings:
             "edinet_api_key_configured": bool(self.edinet_api_key),
             "openai_api_key_configured": bool(self.openai_api_key),
             "storage_dir": str(self.storage_dir),
+            "edinet_lookback_days": self.edinet_lookback_days,
         }
 
 
@@ -52,4 +54,5 @@ def build_ir_settings(settings: Settings) -> IRPipelineSettings:
         analysis_mode=mode,
         dry_run=parse_bool(settings.ir_fetch_dry_run, default=True),
         storage_dir=Path(settings.ir_fetch_storage_dir),
+        edinet_lookback_days=max(1, int(settings.edinet_lookback_days or 365)),
     )

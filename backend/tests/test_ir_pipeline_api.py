@@ -49,6 +49,7 @@ def test_analyze_api_mock_mode_and_analysis_history() -> None:
     runs = runs_response.json()
     assert runs["total"] >= 1
     assert runs["items"][0]["run_type"] in {"mock", "openai"}
+    assert runs["items"][0]["analysis_input_source"] in {"extracted_pdf_text", "existing_db_text", "mock_seed_text"}
 
 
 def test_documents_endpoint_includes_pipeline_status() -> None:
@@ -93,6 +94,7 @@ def test_edinet_client_fails_safely_when_api_key_missing_after_enabled() -> None
         analysis_mode="mock",
         dry_run=False,
         storage_dir=Path("/tmp/ir-fetch-test"),
+        edinet_lookback_days=365,
     )
     company = Company(
         id=999,

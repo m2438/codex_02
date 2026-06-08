@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -107,6 +108,7 @@ def run_response(run: DocumentFetchRun | AnalysisRun) -> dict[str, object]:
         "target_url": run.target_url,
         "saved_path": run.saved_path,
         "input_summary": run.input_summary,
+        "analysis_input_source": getattr(run, "analysis_input_source", None),
         "output_summary": run.output_summary,
         "dry_run": run.dry_run,
     }
@@ -336,12 +338,17 @@ def fetch_company_documents(company_id: int, db: Session = Depends(get_db)) -> d
             document.content_type = result.content_type
             document.file_size_bytes = result.file_size_bytes
             document.retrieved_at = datetime.now(UTC)
+            if result.selected_pdf_url:
+                document.source_url = result.selected_pdf_url
+            extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, result.saved_path or "")
+            if extraction.status == "success" and extraction.saved_path:
+                document.extracted_text_path = extraction.saved_path
         run = DocumentFetchRun(
             company_id=company.id, document_id=document.id, run_type="manual_url", status=result.status,
             started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,
             target_url=result.target_url, saved_path=result.saved_path,
-            input_summary=f"source_url={result.target_url or '未登録'}",
-            output_summary=f"HTTP={result.http_status} Content-Type={result.content_type} size={result.file_size_bytes}",
+            input_summary=f"source_url={document.source_url or '未登録'} original_html_url={result.original_html_url or 'なし'} selected_pdf_url={result.selected_pdf_url or 'なし'} pdf_candidate_count={result.pdf_candidate_count if result.pdf_candidate_count is not None else '未探索'}",
+            output_summary=f"HTTP={result.http_status} Content-Type={result.content_type} size={result.file_size_bytes} saved_path={result.saved_path or 'なし'}",
             dry_run=result.dry_run,
         )
         db.add(run)
@@ -359,12 +366,41 @@ def fetch_company_edinet(company_id: int, db: Session = Depends(get_db)) -> dict
     ir_settings = build_ir_settings(settings)
     started_at = datetime.now(UTC)
     result = EdinetClient(ir_settings).fetch_latest_securities_report(company)
+    document_id = None
+    extraction_summary = ""
+    if result.status == "success" and result.saved_path:
+        document = db.query(Document).filter(Document.company_id == company.id, Document.external_doc_id == result.doc_id).first()
+        if document is None:
+            document = Document(
+                company_id=company.id,
+                document_type=result.document_type,
+                title=f"{company.name} {result.document_type} {result.search_end_date}",
+                source_url="EDINET 書類取得API",
+                source_name="EDINET",
+                retrieved_at=datetime.now(UTC),
+                source_note=f"EDINET docID={result.doc_id}",
+                fiscal_year=company.fiscal_year,
+                text_content="",
+                is_sample=False,
+                external_doc_id=result.doc_id,
+            )
+            db.add(document)
+            db.flush()
+        document.fetched_file_path = result.saved_path
+        document.content_type = "application/pdf"
+        document.retrieved_at = datetime.now(UTC)
+        document_id = document.id
+        extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, result.saved_path)
+        extraction_summary = f" PDF抽出 status={extraction.status} chars={extraction.extracted_char_count}"
+        if extraction.status == "success" and extraction.saved_path:
+            document.extracted_text_path = extraction.saved_path
+            document.text_content = Path(extraction.saved_path).read_text(encoding="utf-8")[:200000]
     run = DocumentFetchRun(
-        company_id=company.id, document_id=None, run_type="edinet", status=result.status,
+        company_id=company.id, document_id=document_id, run_type="edinet", status=result.status,
         started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,
         target_url="EDINET 書類一覧API/書類取得API", saved_path=result.saved_path,
-        input_summary=f"edinet_code={company.edinet_code or '未登録'} document_type={result.document_type} target_date={result.target_date}",
-        output_summary=f"docID={result.doc_id or 'なし'} status={result.status}", dry_run=result.dry_run,
+        input_summary=f"edinet_code={company.edinet_code or '未登録'} document_type={result.document_type} search_start_date={result.search_start_date} search_end_date={result.search_end_date} lookback_days={result.lookback_days}",
+        output_summary=f"docID={result.doc_id or 'なし'} status={result.status} saved_path={result.saved_path or 'なし'}{extraction_summary}", dry_run=result.dry_run,
     )
     db.add(run)
     db.commit()
@@ -381,16 +417,24 @@ def analyze_company_documents(company_id: int, db: Session = Depends(get_db)) ->
     results = []
     for document in sorted(company.documents, key=lambda item: item.id):
         started_at = datetime.now(UTC)
-        extraction_summary = "既存DBテキストを分析"
-        if document.fetched_file_path and not document.extracted_text_path:
+        analysis_input_source = "existing_db_text"
+        extraction_summary = "analysis_input_source=existing_db_text: 既存DBテキストを分析"
+        if document.extracted_text_path and Path(document.extracted_text_path).exists():
+            analysis_input_source = "extracted_pdf_text"
+            extraction_summary = f"analysis_input_source=extracted_pdf_text: 抽出済みPDFテキストを分析 path={document.extracted_text_path}"
+            document.text_content = Path(document.extracted_text_path).read_text(encoding="utf-8")[:200000]
+        elif document.fetched_file_path and Path(document.fetched_file_path).exists():
             extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, document.fetched_file_path)
-            extraction_summary = f"PDF抽出 status={extraction.status} chars={extraction.extracted_char_count}"
             if extraction.status == "success" and extraction.saved_path:
                 document.extracted_text_path = extraction.saved_path
-                try:
-                    document.text_content = open(extraction.saved_path, encoding="utf-8").read()[:200000]
-                except OSError:
-                    pass
+                analysis_input_source = "extracted_pdf_text"
+                extraction_summary = f"analysis_input_source=extracted_pdf_text: PDF抽出 status={extraction.status} chars={extraction.extracted_char_count} path={extraction.saved_path}"
+                document.text_content = Path(extraction.saved_path).read_text(encoding="utf-8")[:200000]
+            else:
+                extraction_summary = f"analysis_input_source=existing_db_text: PDF抽出失敗のため既存DBテキストへフォールバック status={extraction.status} error={extraction.error_message}"
+        elif document.is_sample:
+            analysis_input_source = "mock_seed_text"
+            extraction_summary = "analysis_input_source=mock_seed_text: サンプル/シードテキストを分析"
         candidates = extract_rule_based(document)
         extracted = extract_with_openai(ir_settings, document, candidates)
         for item in extracted:
@@ -417,12 +461,12 @@ def analyze_company_documents(company_id: int, db: Session = Depends(get_db)) ->
             company_id=company.id, document_id=document.id, run_type=ir_settings.effective_analysis_mode, status=status,
             started_at=started_at, completed_at=datetime.now(UTC), error_message=None if extracted else "CRE関連キーワード候補が見つかりませんでした。",
             target_url=document.source_url, saved_path=document.extracted_text_path, input_summary=extraction_summary,
-            output_summary=f"抽出シグナル数={len(extracted)}", dry_run=False,
+            analysis_input_source=analysis_input_source, output_summary=f"抽出シグナル数={len(extracted)}", dry_run=False,
         )
         db.add(run)
-        results.append({"document_id": document.id, "status": status, "signals": [item.as_dict() for item in extracted], "input_summary": extraction_summary})
+        results.append({"document_id": document.id, "status": status, "signals": [item.as_dict() for item in extracted], "input_summary": extraction_summary, "analysis_input_source": analysis_input_source})
     db.commit()
-    return {"company_id": company_id, "status": "success" if created_signals else "skipped", "pipeline": ir_settings.public_status(), "created_signal_count": created_signals, "results": results, **latest_run_summary(company_id, db)}
+    return {"company_id": company_id, "status": "success" if created_signals else "skipped", "pipeline": ir_settings.public_status(), "created_signal_count": created_signals, "analysis_input_source": results[0]["analysis_input_source"] if results else None, "results": results, **latest_run_summary(company_id, db)}
 
 
 @app.get("/api/companies/{company_id}/report")

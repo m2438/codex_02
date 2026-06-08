@@ -167,6 +167,7 @@ class AnalysisRun(Base):
     target_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     saved_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     input_summary: Mapped[str] = mapped_column(Text, default="")
+    analysis_input_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
     output_summary: Mapped[str] = mapped_column(Text, default="")
     dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
 
