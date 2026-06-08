@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ir_analysis_mode: str = Field(default="mock", alias="IR_ANALYSIS_MODE")
     ir_fetch_dry_run: str = Field(default="true", alias="IR_FETCH_DRY_RUN")
     ir_fetch_storage_dir: str = Field(default="./storage/ir_fetch", alias="IR_FETCH_STORAGE_DIR")
+    ir_fetch_max_file_mb: str = Field(default="100", alias="IR_FETCH_MAX_FILE_MB")
     edinet_lookback_days: int = Field(default=365, alias="EDINET_LOOKBACK_DAYS")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

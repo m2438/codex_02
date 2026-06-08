@@ -168,6 +168,7 @@ export type PipelineConfigStatus = {
   edinet_api_key_configured: boolean;
   openai_api_key_configured: boolean;
   storage_dir: string;
+  max_file_mb?: number;
   edinet_lookback_days?: number;
 };
 

@@ -11,8 +11,14 @@ from urllib.request import Request, urlopen
 from app.models import Company, Document
 from app.services.ir_settings import IRPipelineSettings
 
-MAX_DOWNLOAD_BYTES = 30 * 1024 * 1024
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 PDF_KEYWORDS = ["有価証券報告書", "統合報告書", "annual report", "securities report", "yuho", "annual", "report"]
+
+
+class FileSizeLimitExceededError(Exception):
+    def __init__(self, max_file_mb: int) -> None:
+        super().__init__(f"PDFファイルサイズが上限{max_file_mb}MBを超えました。")
+        self.max_file_mb = max_file_mb
 
 
 class PdfLinkParser(HTMLParser):
@@ -77,8 +83,6 @@ class IRDocumentFetcher:
             return self._result(company, document, "dry_run", error_message=msg, dry_run=True)
         try:
             http_status, content_type, content = self._download(document.source_url, timeout=25)
-            if len(content) > MAX_DOWNLOAD_BYTES:
-                return self._result(company, document, "failed", http_status=http_status, content_type=content_type, error_message="ファイルサイズが上限30MBを超えました。")
             selected_pdf_url = document.source_url
             candidate_count: int | None = None
             original_html_url: str | None = None
@@ -90,21 +94,40 @@ class IRDocumentFetcher:
                     return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="HTMLページ内のPDF候補数0件のため取得できませんでした。", original_html_url=original_html_url, pdf_candidate_count=0)
                 selected_pdf_url = choose_pdf_link(candidates, document)
                 http_status, content_type, content = self._download(selected_pdf_url, timeout=30)
-            if len(content) > MAX_DOWNLOAD_BYTES:
-                return self._result(company, document, "failed", http_status=http_status, content_type=content_type, selected_pdf_url=selected_pdf_url, original_html_url=original_html_url, pdf_candidate_count=candidate_count, error_message="PDFファイルサイズが上限30MBを超えました。")
+
             if "pdf" not in content_type.lower() and not selected_pdf_url.lower().split("?")[0].endswith(".pdf"):
                 return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="選択URLがPDFではありません。", original_html_url=original_html_url, selected_pdf_url=selected_pdf_url, pdf_candidate_count=candidate_count)
             saved_path = self._save(company, document, content)
             fetched_at = datetime.now(UTC)
             return self._result(company, document, "success", http_status=http_status, content_type=content_type, file_size_bytes=len(content), fetched_at=fetched_at.isoformat(), saved_path=str(saved_path), original_html_url=original_html_url, selected_pdf_url=selected_pdf_url, pdf_candidate_count=candidate_count)
+        except FileSizeLimitExceededError as exc:
+            return self._result(company, document, "failed", error_message=str(exc))
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
             return self._result(company, document, "failed", error_message=str(exc))
 
     def _download(self, url: str, *, timeout: int) -> tuple[int, str, bytes]:
         request = Request(url, headers={"User-Agent": "cre-sales-intelligence-demo/0.1"})
+        max_bytes = self.settings.max_file_mb * 1024 * 1024
         with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL is manually registered public IR URL.
-            content = response.read(MAX_DOWNLOAD_BYTES + 1)
-            return response.status, response.headers.get("Content-Type", ""), content
+            content_length = response.headers.get("Content-Length")
+            if content_length:
+                try:
+                    advertised_size = int(content_length)
+                except ValueError:
+                    advertised_size = 0
+                if advertised_size > max_bytes:
+                    raise FileSizeLimitExceededError(self.settings.max_file_mb)
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = response.read(DOWNLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise FileSizeLimitExceededError(self.settings.max_file_mb)
+                chunks.append(chunk)
+            return response.status, response.headers.get("Content-Type", ""), b"".join(chunks)
 
     @staticmethod
     def _is_html(content_type: str, url: str) -> bool:

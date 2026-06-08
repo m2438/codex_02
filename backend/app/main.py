@@ -126,6 +126,33 @@ def latest_run_summary(company_id: int, db: Session) -> dict[str, object]:
         "latest_analysis_error": analysis_run.error_message if analysis_run else None,
     }
 
+
+def add_extraction_failure_run(
+    db: Session,
+    *,
+    company_id: int,
+    document_id: int | None,
+    started_at: datetime,
+    target_url: str | None,
+    saved_path: str | None,
+    input_summary: str,
+    error_message: str | None,
+) -> None:
+    db.add(DocumentFetchRun(
+        company_id=company_id,
+        document_id=document_id,
+        run_type="pdf_text_extract",
+        status="extract_failed",
+        started_at=started_at,
+        completed_at=datetime.now(UTC),
+        error_message=error_message or "PDF取得は成功しましたが、テキスト抽出に失敗しました。",
+        target_url=target_url,
+        saved_path=saved_path,
+        input_summary=input_summary,
+        output_summary="PDF取得成功・テキスト抽出失敗",
+        dry_run=False,
+    ))
+
 def signal_response(signal: CRESignal) -> dict[str, object]:
     return {
         "signal_id": signal.id,
@@ -331,6 +358,8 @@ def fetch_company_documents(company_id: int, db: Session = Depends(get_db)) -> d
     fetcher = IRDocumentFetcher(ir_settings)
     results = []
     for document in sorted(company.documents, key=lambda item: item.id):
+        if document.source_name == "EDINET" or not (document.source_url or "").lower().startswith(("http://", "https://")):
+            continue
         started_at = datetime.now(UTC)
         result = fetcher.fetch_document(company, document)
         if result.status == "success":
@@ -343,6 +372,17 @@ def fetch_company_documents(company_id: int, db: Session = Depends(get_db)) -> d
             extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, result.saved_path or "")
             if extraction.status == "success" and extraction.saved_path:
                 document.extracted_text_path = extraction.saved_path
+            else:
+                add_extraction_failure_run(
+                    db,
+                    company_id=company.id,
+                    document_id=document.id,
+                    started_at=datetime.now(UTC),
+                    target_url=result.target_url,
+                    saved_path=result.saved_path,
+                    input_summary=f"manual_url PDF抽出 status={extraction.status}",
+                    error_message=extraction.error_message,
+                )
         run = DocumentFetchRun(
             company_id=company.id, document_id=document.id, run_type="manual_url", status=result.status,
             started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,
@@ -353,6 +393,44 @@ def fetch_company_documents(company_id: int, db: Session = Depends(get_db)) -> d
         )
         db.add(run)
         results.append(result.as_dict())
+    edinet_result = EdinetClient(ir_settings).fetch_latest_securities_report(company)
+    if edinet_result.status == "success" and edinet_result.saved_path:
+        document = db.query(Document).filter(Document.company_id == company.id, Document.external_doc_id == edinet_result.doc_id).first()
+        if document is None:
+            document = Document(
+                company_id=company.id, document_type=edinet_result.document_type,
+                title=f"{company.name} {edinet_result.document_type} {edinet_result.search_end_date}",
+                source_url=None, source_name="EDINET", retrieved_at=datetime.now(UTC),
+                source_note=f"EDINET docID={edinet_result.doc_id}", fiscal_year=company.fiscal_year,
+                text_content="", is_sample=False, external_doc_id=edinet_result.doc_id,
+            )
+            db.add(document)
+            db.flush()
+        document.fetched_file_path = edinet_result.saved_path
+        document.content_type = "application/pdf"
+        document.retrieved_at = datetime.now(UTC)
+        extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, edinet_result.saved_path)
+        if extraction.status == "success" and extraction.saved_path:
+            document.extracted_text_path = extraction.saved_path
+            document.text_content = Path(extraction.saved_path).read_text(encoding="utf-8")[:200000]
+        else:
+            add_extraction_failure_run(
+                db, company_id=company.id, document_id=document.id, started_at=datetime.now(UTC),
+                target_url="EDINET 書類取得API", saved_path=edinet_result.saved_path,
+                input_summary=f"edinet PDF抽出 status={extraction.status}", error_message=extraction.error_message,
+            )
+        document_id = document.id
+    else:
+        document_id = None
+    db.add(DocumentFetchRun(
+        company_id=company.id, document_id=document_id, run_type="edinet", status=edinet_result.status,
+        started_at=datetime.now(UTC), completed_at=datetime.now(UTC), error_message=edinet_result.error_message,
+        target_url="EDINET 書類一覧API/書類取得API", saved_path=edinet_result.saved_path,
+        input_summary=f"edinet_code={company.edinet_code or '未登録'} document_type={edinet_result.document_type} search_start_date={edinet_result.search_start_date} search_end_date={edinet_result.search_end_date} lookback_days={edinet_result.lookback_days}",
+        output_summary=f"docID={edinet_result.doc_id or 'なし'} status={edinet_result.status} saved_path={edinet_result.saved_path or 'なし'}", dry_run=edinet_result.dry_run,
+    ))
+    if edinet_result.status not in {"skipped", "dry_run"}:
+        results.append({"status": edinet_result.status, "run_type": "edinet", "doc_id": edinet_result.doc_id, "error_message": edinet_result.error_message})
     db.commit()
     status = "success" if any(item["status"] == "success" for item in results) else ("dry_run" if any(item["status"] == "dry_run" for item in results) else "skipped")
     return {"company_id": company_id, "status": status, "pipeline": ir_settings.public_status(), "results": results, **latest_run_summary(company_id, db)}
@@ -375,7 +453,7 @@ def fetch_company_edinet(company_id: int, db: Session = Depends(get_db)) -> dict
                 company_id=company.id,
                 document_type=result.document_type,
                 title=f"{company.name} {result.document_type} {result.search_end_date}",
-                source_url="EDINET 書類取得API",
+                source_url=None,
                 source_name="EDINET",
                 retrieved_at=datetime.now(UTC),
                 source_note=f"EDINET docID={result.doc_id}",
@@ -395,6 +473,12 @@ def fetch_company_edinet(company_id: int, db: Session = Depends(get_db)) -> dict
         if extraction.status == "success" and extraction.saved_path:
             document.extracted_text_path = extraction.saved_path
             document.text_content = Path(extraction.saved_path).read_text(encoding="utf-8")[:200000]
+        else:
+            add_extraction_failure_run(
+                db, company_id=company.id, document_id=document.id, started_at=datetime.now(UTC),
+                target_url="EDINET 書類取得API", saved_path=result.saved_path,
+                input_summary=f"edinet PDF抽出 status={extraction.status}", error_message=extraction.error_message,
+            )
     run = DocumentFetchRun(
         company_id=company.id, document_id=document_id, run_type="edinet", status=result.status,
         started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,

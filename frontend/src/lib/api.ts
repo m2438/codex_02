@@ -34,6 +34,18 @@ export async function getCompanyReport(companyId: number): Promise<CompanyReport
   return fetchJson<CompanyReportResponse>(`/companies/${companyId}/report`);
 }
 
+export async function getCompanyDocuments(companyId: number): Promise<Record<string, unknown> | null> {
+  return fetchJson<Record<string, unknown>>(`/companies/${companyId}/documents`);
+}
+
+export async function getCompanyFetchRuns(companyId: number): Promise<Record<string, unknown> | null> {
+  return fetchJson<Record<string, unknown>>(`/companies/${companyId}/fetch-runs`);
+}
+
+export async function getCompanyAnalysisRuns(companyId: number): Promise<Record<string, unknown> | null> {
+  return fetchJson<Record<string, unknown>>(`/companies/${companyId}/analysis-runs`);
+}
+
 
 async function postJson<T>(path: string): Promise<T | null> {
   try {

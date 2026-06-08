@@ -18,6 +18,7 @@ def settings(tmp_path: Path, *, fetch_enabled: bool = True, dry_run: bool = Fals
         analysis_mode="mock",
         dry_run=dry_run,
         storage_dir=tmp_path,
+        max_file_mb=100,
         edinet_lookback_days=365,
     )
 
@@ -68,3 +69,72 @@ def test_rule_based_evidence_ignores_meta_policy_text() -> None:
     signals = extract_rule_based(doc)
     assert signals
     assert all("CRE観点" not in item.evidence_text for item in signals)
+
+from app.config import Settings
+from app.services.ir_document_fetcher import IRDocumentFetcher
+from app.services.ir_settings import build_ir_settings
+
+
+class FakePdfResponse:
+    status = 200
+
+    def __init__(self, content: bytes, content_length: str | None = None) -> None:
+        self._content = content
+        self._offset = 0
+        self.headers = {"Content-Type": "application/pdf"}
+        if content_length is not None:
+            self.headers["Content-Length"] = content_length
+
+    def __enter__(self) -> "FakePdfResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        if self._offset >= len(self._content):
+            return b""
+        if size < 0:
+            size = len(self._content) - self._offset
+        chunk = self._content[self._offset:self._offset + size]
+        self._offset += len(chunk)
+        return chunk
+
+
+def test_ir_fetch_max_file_mb_defaults_to_100() -> None:
+    built = build_ir_settings(Settings())
+    assert built.max_file_mb == 100
+
+
+def test_ir_fetch_max_file_mb_uses_configured_value() -> None:
+    built = build_ir_settings(Settings(IR_FETCH_MAX_FILE_MB="150"))
+    assert built.max_file_mb == 150
+
+
+def test_ir_fetch_max_file_mb_invalid_value_falls_back_to_100() -> None:
+    built = build_ir_settings(Settings(IR_FETCH_MAX_FILE_MB="invalid"))
+    assert built.max_file_mb == 100
+
+
+def test_pdf_size_limit_message_uses_configured_value_from_content_length(monkeypatch, tmp_path: Path) -> None:
+    custom = settings(tmp_path)
+    custom = IRPipelineSettings(**{**custom.__dict__, "max_file_mb": 1})
+    fetcher = IRDocumentFetcher(custom)
+    monkeypatch.setattr("app.services.ir_document_fetcher.urlopen", lambda *args, **kwargs: FakePdfResponse(b"", str(2 * 1024 * 1024)))
+
+    result = fetcher.fetch_document(company(), document())
+
+    assert result.status == "failed"
+    assert result.error_message == "PDFファイルサイズが上限1MBを超えました。"
+
+
+def test_pdf_size_limit_message_uses_configured_value_while_streaming(monkeypatch, tmp_path: Path) -> None:
+    custom = settings(tmp_path)
+    custom = IRPipelineSettings(**{**custom.__dict__, "max_file_mb": 1})
+    fetcher = IRDocumentFetcher(custom)
+    monkeypatch.setattr("app.services.ir_document_fetcher.urlopen", lambda *args, **kwargs: FakePdfResponse(b"x" * (1024 * 1024 + 1)))
+
+    result = fetcher.fetch_document(company(), document())
+
+    assert result.status == "failed"
+    assert result.error_message == "PDFファイルサイズが上限1MBを超えました。"

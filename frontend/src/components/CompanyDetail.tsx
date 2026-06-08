@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react';
-import type { CompanyDetailResponse, CompanyReportResponse, FinancialMetricScales, StructuredReportSection } from '@/types/api';
+'use client';
+
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import type { CompanyDetailResponse, CompanyReportResponse, FinancialMetricScales, PipelineStatus, StructuredReportSection } from '@/types/api';
 import { SignalCard } from './SignalCard';
 import { ScoreBreakdown } from './ScoreBreakdown';
 import { IRPipelinePanel } from './IRPipelinePanel';
+import { getCompanyAnalysisRuns, getCompanyDetail, getCompanyDocuments, getCompanyFetchRuns, getCompanyReport } from '@/lib/api';
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const defaultFinancialScales: FinancialMetricScales = {
@@ -97,6 +100,32 @@ type CompanyDetailProps = {
 };
 
 export function CompanyDetail({ detail, report, financialScales = defaultFinancialScales }: CompanyDetailProps) {
+  const [currentDetail, setCurrentDetail] = useState(detail);
+  const [currentReport, setCurrentReport] = useState(report);
+
+  useEffect(() => {
+    setCurrentDetail(detail);
+    setCurrentReport(report);
+  }, [detail, report]);
+
+  const refreshCompanyData = useCallback(async (): Promise<PipelineStatus | undefined> => {
+    const companyId = currentDetail?.company.company_id ?? detail?.company.company_id;
+    if (!companyId) return undefined;
+    const [nextDetail, nextReport] = await Promise.all([
+      getCompanyDetail(companyId),
+      getCompanyReport(companyId),
+      getCompanyDocuments(companyId),
+      getCompanyFetchRuns(companyId),
+      getCompanyAnalysisRuns(companyId)
+    ]);
+    if (nextDetail) setCurrentDetail(nextDetail);
+    if (nextReport) setCurrentReport(nextReport);
+    return nextDetail?.pipeline_status;
+  }, [currentDetail?.company.company_id, detail?.company.company_id]);
+
+  detail = currentDetail;
+  report = currentReport;
+
   if (!detail) {
     return (
       <section className="panel detail-panel">
@@ -125,12 +154,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         </div>
       </div>
 
-      <div className="panel caution-panel">
-        <strong>公開情報ベースの営業仮説に関する注意</strong>
-        <p>本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。実営業では一次情報確認と個別ヒアリングによる検証が必要です。</p>
-      </div>
-
-      <IRPipelinePanel companyId={company.company_id} initialStatus={detail.pipeline_status} />
+      <IRPipelinePanel companyId={company.company_id} initialStatus={detail.pipeline_status} onRefresh={refreshCompanyData} />
 
       <div className="detail-grid">
         <div className="panel">
@@ -197,12 +221,9 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         </div>
         {report && structuredReport ? (
           <div className="rich-report">
-            <div className="report-meta-card">
-              <p>{renderInlineMarkdown(structuredReport.disclaimer)}</p>
-              <dl>
-                <div><dt>生成日時</dt><dd>{formatDateTime(report.generated_at)}</dd></div>
-                <div><dt>根拠シグナル数</dt><dd>{report.signal_count}件</dd></div>
-              </dl>
+            <div className="report-meta-line" aria-label="分析レポートのメタ情報">
+              <span>生成日時: <strong>{formatDateTime(report.generated_at)}</strong></span>
+              <span>根拠シグナル数: <strong>{report.signal_count}件</strong></span>
             </div>
 
             <div className="report-section-grid">
@@ -273,7 +294,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
             <article className="document-card" key={document.document_id}>
               <h4>{document.document_title ?? document.title}</h4>
               <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name} / 言語: {languageLabel(document.document_language)}</p>
-              {document.source_url ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : <span>URLなし</span>}
+              {document.source_url?.startsWith('http') ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : document.external_doc_id ? <span>EDINET docID: {document.external_doc_id}</span> : <span>URLなし</span>}
               <small>取得: {document.fetched_file_path ? '保存済み' : '未保存'} / 抽出: {document.extracted_text_path ? '抽出済み' : '未抽出'}</small>
             </article>
           ))}

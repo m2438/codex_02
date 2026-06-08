@@ -14,6 +14,7 @@ class IRPipelineSettings:
     analysis_mode: str
     dry_run: bool
     storage_dir: Path
+    max_file_mb: int
     edinet_lookback_days: int
 
     @property
@@ -31,6 +32,7 @@ class IRPipelineSettings:
             "edinet_api_key_configured": bool(self.edinet_api_key),
             "openai_api_key_configured": bool(self.openai_api_key),
             "storage_dir": str(self.storage_dir),
+            "max_file_mb": self.max_file_mb,
             "edinet_lookback_days": self.edinet_lookback_days,
         }
 
@@ -41,6 +43,14 @@ def parse_bool(value: str | bool | None, *, default: bool = False) -> bool:
     if value is None or value == "":
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def parse_positive_int(value: str | int | None, *, default: int) -> int:
+    try:
+        parsed = int(value) if value not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
 
 
 def build_ir_settings(settings: Settings) -> IRPipelineSettings:
@@ -54,5 +64,6 @@ def build_ir_settings(settings: Settings) -> IRPipelineSettings:
         analysis_mode=mode,
         dry_run=parse_bool(settings.ir_fetch_dry_run, default=True),
         storage_dir=Path(settings.ir_fetch_storage_dir),
+        max_file_mb=parse_positive_int(settings.ir_fetch_max_file_mb, default=100),
         edinet_lookback_days=max(1, int(settings.edinet_lookback_days or 365)),
     )

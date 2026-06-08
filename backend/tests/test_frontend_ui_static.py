@@ -72,3 +72,44 @@ def test_caveats_section_uses_compact_caution_class() -> None:
     assert "report-section--caution" in css
     assert ".report-section--caution li" in css
     assert "font-size: 11px" in css
+
+
+def test_phase4b_panel_copy_removed_and_operation_panel_label_used() -> None:
+    panel = read("frontend/src/components/IRPipelinePanel.tsx")
+    assert "Phase 4B 操作パネル" not in panel
+    assert "<h3>操作パネル</h3>" in panel
+    assert "公開情報に基づく営業仮説生成用です。企業IRサイト全体のクロールは行いません。" not in panel
+
+
+def test_detail_notice_card_and_report_disclaimer_are_not_rendered_at_top() -> None:
+    detail = read("frontend/src/components/CompanyDetail.tsx")
+    assert "公開情報ベースの営業仮説に関する注意" not in detail
+    assert "structuredReport.disclaimer" not in detail
+    assert "本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。" not in detail
+
+
+def test_report_meta_uses_compact_inline_structure() -> None:
+    detail = read("frontend/src/components/CompanyDetail.tsx")
+    css = read("frontend/src/app/globals.css")
+    assert "report-meta-line" in detail
+    assert "report-meta-card" not in detail
+    assert ".report-meta-line" in css
+    assert "font-size: 12px" in css
+
+
+def test_button_actions_refetch_company_detail_and_report_after_completion() -> None:
+    detail = read("frontend/src/components/CompanyDetail.tsx")
+    panel = read("frontend/src/components/IRPipelinePanel.tsx")
+    assert "getCompanyDetail(companyId)" in detail
+    assert "getCompanyReport(companyId)" in detail
+    assert "onRefresh?.()" in panel
+    assert "finally" in panel
+
+
+def test_edinet_button_removed_and_edinet_docid_shown_without_url_link() -> None:
+    panel = read("frontend/src/components/IRPipelinePanel.tsx")
+    detail = read("frontend/src/components/CompanyDetail.tsx")
+    assert "EDINET取得" not in panel
+    assert "postEdinetFetch" not in panel
+    assert "document.source_url?.startsWith('http')" in detail
+    assert "EDINET docID" in detail

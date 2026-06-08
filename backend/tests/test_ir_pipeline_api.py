@@ -94,6 +94,7 @@ def test_edinet_client_fails_safely_when_api_key_missing_after_enabled() -> None
         analysis_mode="mock",
         dry_run=False,
         storage_dir=Path("/tmp/ir-fetch-test"),
+        max_file_mb=100,
         edinet_lookback_days=365,
     )
     company = Company(
