@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { CompanyDetailResponse, CompanyReportResponse, FinancialMetricScales, StructuredReportSection } from '@/types/api';
 import { SignalCard } from './SignalCard';
 import { ScoreBreakdown } from './ScoreBreakdown';
+import { IRPipelinePanel } from './IRPipelinePanel';
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const defaultFinancialScales: FinancialMetricScales = {
@@ -114,7 +115,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         <div>
           <p className="section-kicker">企業詳細</p>
           <h2>{company.name}</h2>
-          <p className="detail-panel__subtitle">{company.ticker} / {company.market} / {company.industry}</p>
+          <p className="detail-panel__subtitle">{company.ticker} / {company.market} / {company.industry} / EDINET: {company.edinet_code ?? '未登録'}</p>
           <span className={`data-source-badge data-source-badge--${company.data_source_type}`}>{dataSourceLabel(company.data_source_type)}</span>
         </div>
         <div className="profile-grid">
@@ -128,6 +129,8 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
         <strong>公開情報ベースの営業仮説に関する注意</strong>
         <p>本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。実営業では一次情報確認と個別ヒアリングによる検証が必要です。</p>
       </div>
+
+      <IRPipelinePanel companyId={company.company_id} initialStatus={detail.pipeline_status} />
 
       <div className="detail-grid">
         <div className="panel">
@@ -271,6 +274,7 @@ export function CompanyDetail({ detail, report, financialScales = defaultFinanci
               <h4>{document.document_title ?? document.title}</h4>
               <p>{document.document_type} / FY{document.fiscal_year} / {document.source_name} / 言語: {languageLabel(document.document_language)}</p>
               {document.source_url ? <a href={document.source_url} target="_blank" rel="noreferrer">資料URLを開く</a> : <span>URLなし</span>}
+              <small>取得: {document.fetched_file_path ? '保存済み' : '未保存'} / 抽出: {document.extracted_text_path ? '抽出済み' : '未抽出'}</small>
             </article>
           ))}
         </div>

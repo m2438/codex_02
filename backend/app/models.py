@@ -22,6 +22,7 @@ class Company(Base):
     listing_country: Mapped[str] = mapped_column(String(80), default="日本")
     is_public_company: Mapped[bool] = mapped_column(Boolean, default=True)
     selection_reason: Mapped[str] = mapped_column(Text, default="合成デモデータ")
+    edinet_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
@@ -30,6 +31,8 @@ class Company(Base):
     cre_signals: Mapped[list["CRESignal"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     scores: Mapped[list["Score"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     reports: Mapped[list["Report"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    document_fetch_runs: Mapped[list["DocumentFetchRun"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    analysis_runs: Mapped[list["AnalysisRun"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -48,10 +51,17 @@ class Document(Base):
     fiscal_year: Mapped[str] = mapped_column(String(16))
     text_content: Mapped[str] = mapped_column(Text)
     is_sample: Mapped[bool] = mapped_column(Boolean, default=True)
+    fetched_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    extracted_text_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_doc_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     company: Mapped[Company] = relationship(back_populates="documents")
     cre_signals: Mapped[list["CRESignal"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    document_fetch_runs: Mapped[list["DocumentFetchRun"]] = relationship(back_populates="document")
+    analysis_runs: Mapped[list["AnalysisRun"]] = relationship(back_populates="document")
 
 
 class FinancialMetric(Base):
@@ -120,3 +130,45 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     company: Mapped[Company] = relationship(back_populates="reports")
+
+
+class DocumentFetchRun(Base):
+    __tablename__ = "document_fetch_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), index=True)
+    document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id"), nullable=True, index=True)
+    run_type: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    saved_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    input_summary: Mapped[str] = mapped_column(Text, default="")
+    output_summary: Mapped[str] = mapped_column(Text, default="")
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    company: Mapped[Company] = relationship(back_populates="document_fetch_runs")
+    document: Mapped[Document | None] = relationship(back_populates="document_fetch_runs")
+
+
+class AnalysisRun(Base):
+    __tablename__ = "analysis_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), index=True)
+    document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id"), nullable=True, index=True)
+    run_type: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    saved_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    input_summary: Mapped[str] = mapped_column(Text, default="")
+    output_summary: Mapped[str] = mapped_column(Text, default="")
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    company: Mapped[Company] = relationship(back_populates="analysis_runs")
+    document: Mapped[Document | None] = relationship(back_populates="analysis_runs")

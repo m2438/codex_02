@@ -6,7 +6,7 @@ from typing import TypedDict
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from app.models import CRESignal, Company, Document, FinancialMetric, Report, Score
+from app.models import AnalysisRun, CRESignal, Company, Document, DocumentFetchRun, FinancialMetric, Report, Score
 from app.services.scoring import FinancialInputs, SignalInputs, calculate_sales_priority_score
 
 
@@ -31,6 +31,7 @@ class CompanySeed(TypedDict):
 
 class PublicCompanySeed(CompanySeed):
     ticker: str
+    edinet_code: str | None
     market: str
     fiscal_year: str
     document_title: str
@@ -57,43 +58,48 @@ SIGNAL_PATTERNS = {
 }
 
 PUBLIC_COMPANY_SEEDS: list[PublicCompanySeed] = [
-    {"ticker": "7203", "name": "トヨタ自動車株式会社", "market": "東証プライム", "industry": "輸送用機器", "profile": "自動車、モビリティ、研究開発、生産拠点を国内外に有する製造業", "location": "愛知県豊田市", "employees": 384000, "revenue": 48_036_000, "capex": 2_200_000, "cash": 9_400_000, "growth": 6.5, "margin": 9.4, "fiscal_year": "2025", "document_title": "有価証券報告書・半期報告書 2025年3月期", "document_type": "有価証券報告書", "source_url": "https://global.toyota/jp/ir/library/securities-report/index.html", "source_note": "公式IRの有価証券報告書ライブラリを参照。統合報告書・決算資料も補助的に確認。", "selection_reason": "国内最大級の製造業で、工場・研究開発・脱炭素投資などCRE論点が幅広い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開IR資料では、自動車生産・電動化・ソフトウェア領域の競争力強化に向けた投資継続が示されている。", "R&D拠点拡張": "統合報告書等では研究開発・先進技術への継続投資が説明されている。", "脱炭素": "カーボンニュートラルや電動化対応が経営課題として説明されている。", "BCP": "グローバル供給網と生産体制の強靭化が公開資料上の確認テーマとなる。"}},
-    {"ticker": "3382", "name": "株式会社セブン＆アイ・ホールディングス", "market": "東証プライム", "industry": "小売業", "profile": "国内外のコンビニエンスストア等を展開する小売グループ", "location": "東京都千代田区", "employees": 83000, "revenue": 11_972_000, "capex": 520_000, "cash": 2_000_000, "growth": 1.2, "margin": 4.5, "fiscal_year": "2024", "document_title": "Annual Securities Report FY2024", "document_type": "有価証券報告書", "source_url": "https://www.7andi.com/en/ir/file/library/pdf/25_7andi_int04_en.pdf", "source_note": "公式IR掲載の英訳Annual Securities Reportを参照。", "selection_reason": "店舗網・物流・事業ポートフォリオ見直しの観点で小売CRE仮説を示しやすい。", "signals": [{"type": "物流再編", "confidence": "medium"}, {"type": "構造改革", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}], "evidence_by_signal": {"物流再編": "公開資料ではコンビニエンスストア事業を中心とした成長戦略と店舗・物流運営の高度化が説明されている。", "構造改革": "グループ事業の変革や価値向上施策がIR資料で説明されている。", "拠点再編": "店舗網・国内外事業運営の見直しはCRE観点で確認すべきテーマとなる。"}},
-    {"ticker": "9147", "name": "NIPPON EXPRESSホールディングス株式会社", "market": "東証プライム", "industry": "陸運業", "profile": "国内外で物流、倉庫、フォワーディングを展開する総合物流企業", "location": "東京都千代田区", "employees": 73000, "revenue": 2_500_000, "capex": 120_000, "cash": 300_000, "growth": 2.0, "margin": 4.0, "fiscal_year": "2024", "document_title": "有価証券報告書 2024年12月期", "document_type": "有価証券報告書", "source_url": "https://www.nipponexpress-holdings.com/ja/ir/library/securities/", "source_note": "公式IRの有価証券報告書ライブラリおよび統合報告書2025を参照。", "selection_reason": "物流施設、倉庫ネットワーク、サステナビリティ投資のCRE論点が明確。", "signals": [{"type": "物流再編", "confidence": "high"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"物流再編": "統合報告書ではグローバル物流ネットワークと成長領域での物流機能強化が説明されている。", "脱炭素": "SBT認定など気候変動対応が公開情報で確認できる。", "BCP": "物流インフラとしてサプライチェーン強靭化を確認すべき企業である。"}},
-    {"ticker": "9020", "name": "東日本旅客鉄道株式会社", "market": "東証プライム", "industry": "鉄道", "profile": "鉄道、駅、生活サービス、不動産・まちづくりを展開する交通インフラ企業", "location": "東京都渋谷区", "employees": 68000, "revenue": 2_730_000, "capex": 740_000, "cash": 420_000, "growth": 9.0, "margin": 12.0, "fiscal_year": "2025", "document_title": "Annual Securities Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.jreast.co.jp/e/investor/securitiesreport/pdf/securitiesreport_fiscal2025.pdf", "source_note": "公式IR掲載のAnnual Securities Report 2025を参照。", "selection_reason": "鉄道設備、駅周辺開発、老朽化・BCP対応などCRE/インフラ論点が多い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "建替え", "confidence": "medium"}, {"type": "BCP", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料では鉄道設備、安全対策、生活ソリューションに関わる投資が説明されている。", "建替え": "駅・鉄道施設・関連施設の更新やまちづくりはCRE観点の確認事項となる。", "BCP": "交通インフラとして災害対応・安全安定輸送の継続が重要課題として説明されている。", "拠点再編": "駅周辺・沿線開発は保有資産の活用仮説につながる。"}},
-    {"ticker": "3231", "name": "野村不動産ホールディングス株式会社", "market": "東証プライム", "industry": "不動産業", "profile": "住宅、オフィス、物流施設、商業施設等を展開する総合不動産グループ", "location": "東京都新宿区", "employees": 7900, "revenue": 780_000, "capex": 260_000, "cash": 100_000, "growth": 5.0, "margin": 11.0, "fiscal_year": "2025", "document_title": "Financial Report 2025 / Integrated Report 2025", "document_type": "有価証券報告書相当資料", "source_url": "https://www.nomura-re-hd.co.jp/english/ir/ir_library/annualreport.html", "source_note": "公式IRのFinancial Report 2025（有価証券報告書の要約位置づけ）と統合報告書を参照。", "selection_reason": "不動産開発・保有運営・物流施設など、CRE提案テーマと比較しやすい。", "signals": [{"type": "建替え", "confidence": "medium"}, {"type": "資産売却", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"建替え": "統合報告書では不動産開発・都市開発・資産価値向上の取り組みが説明されている。", "資産売却": "不動産ポートフォリオ運営と資本効率は公開資料上の確認テーマである。", "脱炭素": "サステナビリティや環境配慮型開発が説明されている。"}},
-    {"ticker": "9432", "name": "日本電信電話株式会社", "market": "東証プライム", "industry": "情報・通信業", "profile": "通信、データセンター、ICT、研究開発を展開する通信インフラ企業", "location": "東京都千代田区", "employees": 338000, "revenue": 13_374_000, "capex": 1_900_000, "cash": 1_000_000, "growth": 3.0, "margin": 14.0, "fiscal_year": "2025", "document_title": "Securities Report / Integrated Report 2025", "document_type": "有価証券報告書", "source_url": "https://group.ntt/en/ir/library/yuho/", "source_note": "公式IRのSecurities ReportページおよびIntegrated Report 2025を参照。", "selection_reason": "通信局舎、データセンター、研究開発、脱炭素投資のCRE論点が多い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "統合報告書ではネットワーク・データセンター・ICT基盤への投資が説明されている。", "R&D拠点拡張": "研究開発とIOWN等の技術戦略が公開情報で説明されている。", "脱炭素": "環境・エネルギー効率化の取り組みが統合報告書に整理されている。", "BCP": "通信インフラとして冗長性・信頼性を確認すべき対象である。"}},
-    {"ticker": "6503", "name": "三菱電機株式会社", "market": "東証プライム", "industry": "電気機器", "profile": "インフラ、FA、空調、半導体・デバイス等を展開する総合電機メーカー", "location": "東京都千代田区", "employees": 149000, "revenue": 5_520_000, "capex": 300_000, "cash": 870_000, "growth": 4.0, "margin": 7.0, "fiscal_year": "2025", "document_title": "Annual Securities Report for FY2025", "document_type": "有価証券報告書", "source_url": "https://www.mitsubishielectric.com/investors/library/securities_report/index.html", "source_note": "公式IRのAnnual Securities Reportページと統合報告書2025を参照。", "selection_reason": "工場、研究開発、社会インフラ、半導体・データセンター関連設備の論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "有価証券報告書・統合報告書では各事業セグメントの生産・開発・品質強化が説明されている。", "R&D拠点拡張": "研究開発と技術基盤強化は公開資料上の重要テーマである。", "脱炭素": "省エネ・環境価値を提供する事業と自社環境対応が説明されている。"}},
-    {"ticker": "4502", "name": "武田薬品工業株式会社", "market": "東証プライム", "industry": "医薬品", "profile": "グローバルに研究開発・製造・販売を展開する製薬企業", "location": "東京都中央区", "employees": 49000, "revenue": 4_580_000, "capex": 220_000, "cash": 520_000, "growth": 6.0, "margin": 15.0, "fiscal_year": "2024", "document_title": "Annual Report FY2024 / Annual Integrated Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.takeda.com/investors/sec-filings-and-security-reports/", "source_note": "公式IRのAnnual Report（Securities Report translation）およびAnnual Integrated Reportを参照。", "selection_reason": "研究所・製造拠点・品質管理・サステナビリティ投資のCRE仮説を検討しやすい。", "signals": [{"type": "R&D拠点拡張", "confidence": "high"}, {"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"R&D拠点拡張": "統合報告書では研究開発パイプラインとR&D投資の重要性が説明されている。", "設備投資": "医薬品の製造・品質・供給体制は公開資料から確認すべきテーマである。", "脱炭素": "サステナビリティと環境負荷低減に関する取り組みが説明されている。"}},
-    {"ticker": "4182", "name": "三菱ガス化学株式会社", "market": "東証プライム", "industry": "化学", "profile": "基礎化学品、機能化学品、半導体関連材料等を展開する化学メーカー", "location": "東京都千代田区", "employees": 10000, "revenue": 810_000, "capex": 85_000, "cash": 170_000, "growth": 3.0, "margin": 8.0, "fiscal_year": "2025", "document_title": "Annual Securities Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.mgc.co.jp/eng/ir/library/report.html", "source_note": "公式IRのSecurities Reportsページを参照。", "selection_reason": "化学プラント、研究開発、半導体材料、脱炭素・安全対策のCRE論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料では化学品・機能材料事業の生産・開発基盤が説明されている。", "脱炭素": "化学メーカーとして環境対応や排出削減を確認すべき対象である。", "BCP": "化学プラントの安全・安定操業はCRE/施設管理上の確認テーマとなる。"}},
-    {"ticker": "9531", "name": "東京ガス株式会社", "market": "東証プライム", "industry": "電気・ガス業", "profile": "都市ガス、電力、エネルギーソリューション、不動産等を展開するインフラ企業", "location": "東京都港区", "employees": 15000, "revenue": 2_660_000, "capex": 300_000, "cash": 250_000, "growth": 2.5, "margin": 7.0, "fiscal_year": "2025", "document_title": "有価証券報告書・四半期報告書 2025年3月期", "document_type": "有価証券報告書", "source_url": "https://www.tokyo-gas.co.jp/IR/library/yuho_j.html", "source_note": "公式IRの有価証券報告書・四半期報告書ページおよび統合報告書2025を参照。", "selection_reason": "エネルギー供給インフラ、脱炭素、供給設備投資、不動産活用の論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "high"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料ではガス・電力等の供給インフラと設備投資が確認テーマとなる。", "脱炭素": "カーボンニュートラルやエネルギートランジションが統合報告書等で説明されている。", "BCP": "エネルギーインフラとして安定供給・災害対応を確認すべき企業である。"}},
+    {"ticker": "7203", "edinet_code": "E02144", "name": "トヨタ自動車株式会社", "market": "東証プライム", "industry": "輸送用機器", "profile": "自動車、モビリティ、研究開発、生産拠点を国内外に有する製造業", "location": "愛知県豊田市", "employees": 384000, "revenue": 48_036_000, "capex": 2_200_000, "cash": 9_400_000, "growth": 6.5, "margin": 9.4, "fiscal_year": "2025", "document_title": "有価証券報告書・半期報告書 2025年3月期", "document_type": "有価証券報告書", "source_url": "https://global.toyota/jp/ir/library/securities-report/index.html", "source_note": "公式IRの有価証券報告書ライブラリを参照。統合報告書・決算資料も補助的に確認。", "selection_reason": "国内最大級の製造業で、工場・研究開発・脱炭素投資などCRE論点が幅広い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開IR資料では、自動車生産・電動化・ソフトウェア領域の競争力強化に向けた投資継続が示されている。", "R&D拠点拡張": "統合報告書等では研究開発・先進技術への継続投資が説明されている。", "脱炭素": "カーボンニュートラルや電動化対応が経営課題として説明されている。", "BCP": "グローバル供給網と生産体制の強靭化が公開資料上の確認テーマとなる。"}},
+    {"ticker": "3382", "edinet_code": "E03462", "name": "株式会社セブン＆アイ・ホールディングス", "market": "東証プライム", "industry": "小売業", "profile": "国内外のコンビニエンスストア等を展開する小売グループ", "location": "東京都千代田区", "employees": 83000, "revenue": 11_972_000, "capex": 520_000, "cash": 2_000_000, "growth": 1.2, "margin": 4.5, "fiscal_year": "2024", "document_title": "Annual Securities Report FY2024", "document_type": "有価証券報告書", "source_url": "https://www.7andi.com/en/ir/file/library/pdf/25_7andi_int04_en.pdf", "source_note": "公式IR掲載の英訳Annual Securities Reportを参照。", "selection_reason": "店舗網・物流・事業ポートフォリオ見直しの観点で小売CRE仮説を示しやすい。", "signals": [{"type": "物流再編", "confidence": "medium"}, {"type": "構造改革", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}], "evidence_by_signal": {"物流再編": "公開資料ではコンビニエンスストア事業を中心とした成長戦略と店舗・物流運営の高度化が説明されている。", "構造改革": "グループ事業の変革や価値向上施策がIR資料で説明されている。", "拠点再編": "店舗網・国内外事業運営の見直しはCRE観点で確認すべきテーマとなる。"}},
+    {"ticker": "9147", "edinet_code": "E36706", "name": "NIPPON EXPRESSホールディングス株式会社", "market": "東証プライム", "industry": "陸運業", "profile": "国内外で物流、倉庫、フォワーディングを展開する総合物流企業", "location": "東京都千代田区", "employees": 73000, "revenue": 2_500_000, "capex": 120_000, "cash": 300_000, "growth": 2.0, "margin": 4.0, "fiscal_year": "2024", "document_title": "有価証券報告書 2024年12月期", "document_type": "有価証券報告書", "source_url": "https://www.nipponexpress-holdings.com/ja/ir/library/securities/", "source_note": "公式IRの有価証券報告書ライブラリおよび統合報告書2025を参照。", "selection_reason": "物流施設、倉庫ネットワーク、サステナビリティ投資のCRE論点が明確。", "signals": [{"type": "物流再編", "confidence": "high"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"物流再編": "統合報告書ではグローバル物流ネットワークと成長領域での物流機能強化が説明されている。", "脱炭素": "SBT認定など気候変動対応が公開情報で確認できる。", "BCP": "物流インフラとしてサプライチェーン強靭化を確認すべき企業である。"}},
+    {"ticker": "9020", "edinet_code": "E04147", "name": "東日本旅客鉄道株式会社", "market": "東証プライム", "industry": "鉄道", "profile": "鉄道、駅、生活サービス、不動産・まちづくりを展開する交通インフラ企業", "location": "東京都渋谷区", "employees": 68000, "revenue": 2_730_000, "capex": 740_000, "cash": 420_000, "growth": 9.0, "margin": 12.0, "fiscal_year": "2025", "document_title": "Annual Securities Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.jreast.co.jp/e/investor/securitiesreport/pdf/securitiesreport_fiscal2025.pdf", "source_note": "公式IR掲載のAnnual Securities Report 2025を参照。", "selection_reason": "鉄道設備、駅周辺開発、老朽化・BCP対応などCRE/インフラ論点が多い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "建替え", "confidence": "medium"}, {"type": "BCP", "confidence": "high"}, {"type": "拠点再編", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料では鉄道設備、安全対策、生活ソリューションに関わる投資が説明されている。", "建替え": "駅・鉄道施設・関連施設の更新やまちづくりはCRE観点の確認事項となる。", "BCP": "交通インフラとして災害対応・安全安定輸送の継続が重要課題として説明されている。", "拠点再編": "駅周辺・沿線開発は保有資産の活用仮説につながる。"}},
+    {"ticker": "3231", "edinet_code": "E04060", "name": "野村不動産ホールディングス株式会社", "market": "東証プライム", "industry": "不動産業", "profile": "住宅、オフィス、物流施設、商業施設等を展開する総合不動産グループ", "location": "東京都新宿区", "employees": 7900, "revenue": 780_000, "capex": 260_000, "cash": 100_000, "growth": 5.0, "margin": 11.0, "fiscal_year": "2025", "document_title": "Financial Report 2025 / Integrated Report 2025", "document_type": "有価証券報告書相当資料", "source_url": "https://www.nomura-re-hd.co.jp/english/ir/ir_library/annualreport.html", "source_note": "公式IRのFinancial Report 2025（有価証券報告書の要約位置づけ）と統合報告書を参照。", "selection_reason": "不動産開発・保有運営・物流施設など、CRE提案テーマと比較しやすい。", "signals": [{"type": "建替え", "confidence": "medium"}, {"type": "資産売却", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"建替え": "統合報告書では不動産開発・都市開発・資産価値向上の取り組みが説明されている。", "資産売却": "不動産ポートフォリオ運営と資本効率は公開資料上の確認テーマである。", "脱炭素": "サステナビリティや環境配慮型開発が説明されている。"}},
+    {"ticker": "9432", "edinet_code": "E04430", "name": "日本電信電話株式会社", "market": "東証プライム", "industry": "情報・通信業", "profile": "通信、データセンター、ICT、研究開発を展開する通信インフラ企業", "location": "東京都千代田区", "employees": 338000, "revenue": 13_374_000, "capex": 1_900_000, "cash": 1_000_000, "growth": 3.0, "margin": 14.0, "fiscal_year": "2025", "document_title": "Securities Report / Integrated Report 2025", "document_type": "有価証券報告書", "source_url": "https://group.ntt/en/ir/library/yuho/", "source_note": "公式IRのSecurities ReportページおよびIntegrated Report 2025を参照。", "selection_reason": "通信局舎、データセンター、研究開発、脱炭素投資のCRE論点が多い。", "signals": [{"type": "設備投資", "confidence": "high"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "統合報告書ではネットワーク・データセンター・ICT基盤への投資が説明されている。", "R&D拠点拡張": "研究開発とIOWN等の技術戦略が公開情報で説明されている。", "脱炭素": "環境・エネルギー効率化の取り組みが統合報告書に整理されている。", "BCP": "通信インフラとして冗長性・信頼性を確認すべき対象である。"}},
+    {"ticker": "6503", "edinet_code": "E01739", "name": "三菱電機株式会社", "market": "東証プライム", "industry": "電気機器", "profile": "インフラ、FA、空調、半導体・デバイス等を展開する総合電機メーカー", "location": "東京都千代田区", "employees": 149000, "revenue": 5_520_000, "capex": 300_000, "cash": 870_000, "growth": 4.0, "margin": 7.0, "fiscal_year": "2025", "document_title": "Annual Securities Report for FY2025", "document_type": "有価証券報告書", "source_url": "https://www.mitsubishielectric.com/investors/library/securities_report/index.html", "source_note": "公式IRのAnnual Securities Reportページと統合報告書2025を参照。", "selection_reason": "工場、研究開発、社会インフラ、半導体・データセンター関連設備の論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "R&D拠点拡張", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "有価証券報告書・統合報告書では各事業セグメントの生産・開発・品質強化が説明されている。", "R&D拠点拡張": "研究開発と技術基盤強化は公開資料上の重要テーマである。", "脱炭素": "省エネ・環境価値を提供する事業と自社環境対応が説明されている。"}},
+    {"ticker": "4502", "edinet_code": "E00919", "name": "武田薬品工業株式会社", "market": "東証プライム", "industry": "医薬品", "profile": "グローバルに研究開発・製造・販売を展開する製薬企業", "location": "東京都中央区", "employees": 49000, "revenue": 4_580_000, "capex": 220_000, "cash": 520_000, "growth": 6.0, "margin": 15.0, "fiscal_year": "2024", "document_title": "Annual Report FY2024 / Annual Integrated Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.takeda.com/investors/sec-filings-and-security-reports/", "source_note": "公式IRのAnnual Report（Securities Report translation）およびAnnual Integrated Reportを参照。", "selection_reason": "研究所・製造拠点・品質管理・サステナビリティ投資のCRE仮説を検討しやすい。", "signals": [{"type": "R&D拠点拡張", "confidence": "high"}, {"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}], "evidence_by_signal": {"R&D拠点拡張": "統合報告書では研究開発パイプラインとR&D投資の重要性が説明されている。", "設備投資": "医薬品の製造・品質・供給体制は公開資料から確認すべきテーマである。", "脱炭素": "サステナビリティと環境負荷低減に関する取り組みが説明されている。"}},
+    {"ticker": "4182", "edinet_code": "E00815", "name": "三菱ガス化学株式会社", "market": "東証プライム", "industry": "化学", "profile": "基礎化学品、機能化学品、半導体関連材料等を展開する化学メーカー", "location": "東京都千代田区", "employees": 10000, "revenue": 810_000, "capex": 85_000, "cash": 170_000, "growth": 3.0, "margin": 8.0, "fiscal_year": "2025", "document_title": "Annual Securities Report 2025", "document_type": "有価証券報告書", "source_url": "https://www.mgc.co.jp/eng/ir/library/report.html", "source_note": "公式IRのSecurities Reportsページを参照。", "selection_reason": "化学プラント、研究開発、半導体材料、脱炭素・安全対策のCRE論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "medium"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料では化学品・機能材料事業の生産・開発基盤が説明されている。", "脱炭素": "化学メーカーとして環境対応や排出削減を確認すべき対象である。", "BCP": "化学プラントの安全・安定操業はCRE/施設管理上の確認テーマとなる。"}},
+    {"ticker": "9531", "edinet_code": "E04514", "name": "東京ガス株式会社", "market": "東証プライム", "industry": "電気・ガス業", "profile": "都市ガス、電力、エネルギーソリューション、不動産等を展開するインフラ企業", "location": "東京都港区", "employees": 15000, "revenue": 2_660_000, "capex": 300_000, "cash": 250_000, "growth": 2.5, "margin": 7.0, "fiscal_year": "2025", "document_title": "有価証券報告書・四半期報告書 2025年3月期", "document_type": "有価証券報告書", "source_url": "https://www.tokyo-gas.co.jp/IR/library/yuho_j.html", "source_note": "公式IRの有価証券報告書・四半期報告書ページおよび統合報告書2025を参照。", "selection_reason": "エネルギー供給インフラ、脱炭素、供給設備投資、不動産活用の論点がある。", "signals": [{"type": "設備投資", "confidence": "medium"}, {"type": "脱炭素", "confidence": "high"}, {"type": "BCP", "confidence": "medium"}], "evidence_by_signal": {"設備投資": "公開資料ではガス・電力等の供給インフラと設備投資が確認テーマとなる。", "脱炭素": "カーボンニュートラルやエネルギートランジションが統合報告書等で説明されている。", "BCP": "エネルギーインフラとして安定供給・災害対応を確認すべき企業である。"}},
 ]
 
 
 def _ensure_phase4a_columns(db: Session) -> None:
+    """Add demo compatibility columns for local SQLite databases without migrations."""
+
     inspector = inspect(db.bind)
-    existing_company_columns = {column["name"] for column in inspector.get_columns("companies")}
-    company_columns = {
-        "data_source_type": "VARCHAR(20) DEFAULT 'synthetic'",
+
+    def add_missing_columns(table_name: str, definitions: dict[str, str]) -> None:
+        existing = {column["name"] for column in inspector.get_columns(table_name)}
+        for name, ddl in definitions.items():
+            if name not in existing:
+                db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {name} {ddl}"))
+
+    add_missing_columns("companies", {
+        "data_source_type": "VARCHAR(20) DEFAULT 'public_demo'",
         "listing_country": "VARCHAR(80) DEFAULT '日本'",
         "is_public_company": "BOOLEAN DEFAULT 1",
-        "selection_reason": "TEXT DEFAULT '合成デモデータ'",
-    }
-    for column_name, definition in company_columns.items():
-        if column_name not in existing_company_columns:
-            db.execute(text(f"ALTER TABLE companies ADD COLUMN {column_name} {definition}"))
-
-    existing_document_columns = {column["name"] for column in inspector.get_columns("documents")}
-    document_columns = {
-        "retrieved_at": "DATETIME",
+        "selection_reason": "TEXT DEFAULT ''",
+        "edinet_code": "VARCHAR(16)",
+    })
+    add_missing_columns("documents", {
         "source_note": "TEXT DEFAULT ''",
         "document_language": "VARCHAR(20) DEFAULT 'ja'",
-    }
-    for column_name, definition in document_columns.items():
-        if column_name not in existing_document_columns:
-            db.execute(text(f"ALTER TABLE documents ADD COLUMN {column_name} {definition}"))
+        "published_date": "DATE",
+        "fetched_file_path": "VARCHAR(500)",
+        "extracted_text_path": "VARCHAR(500)",
+        "content_type": "VARCHAR(120)",
+        "file_size_bytes": "INTEGER",
+        "external_doc_id": "VARCHAR(80)",
+    })
     db.commit()
-
 
 def _japanese_document_definitions(seed: PublicCompanySeed) -> list[dict[str, str]]:
     document_urls = {
@@ -169,6 +175,7 @@ def _seed_public_demo_companies(db: Session, *, existing_public_tickers: set[str
             listing_country="日本",
             is_public_company=True,
             selection_reason=seed["selection_reason"],
+            edinet_code=seed.get("edinet_code"),
         )
         db.add(company)
         db.flush()
@@ -289,7 +296,7 @@ def seed_database(db: Session) -> None:
     expected_document_count = len(PUBLIC_COMPANY_SEEDS) * 2
 
     if synthetic_count or public_count != len(PUBLIC_COMPANY_SEEDS) or document_count < expected_document_count:
-        for model in (Score, CRESignal, FinancialMetric, Document, Report, Company):
+        for model in (AnalysisRun, DocumentFetchRun, Score, CRESignal, FinancialMetric, Document, Report, Company):
             db.query(model).delete()
         db.commit()
         _seed_public_demo_companies(db, existing_public_tickers=set())
@@ -299,4 +306,6 @@ def seed_database(db: Session) -> None:
     db.query(Company).filter(Company.data_source_type.is_(None)).update({Company.data_source_type: "public_demo"})
     db.query(Company).filter(Company.listing_country.is_(None)).update({Company.listing_country: "日本"})
     db.query(Document).filter(Document.document_language.is_(None)).update({Document.document_language: "ja"})
+    for seed in PUBLIC_COMPANY_SEEDS:
+        db.query(Company).filter(Company.ticker == seed["ticker"], Company.edinet_code.is_(None)).update({Company.edinet_code: seed.get("edinet_code")})
     db.commit()
