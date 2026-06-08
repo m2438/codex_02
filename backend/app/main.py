@@ -95,6 +95,27 @@ def report_response(report: CompanyReportResult) -> dict[str, object]:
     }
 
 
+def sanitize_user_message(message: str | None) -> str | None:
+    if not message:
+        return None
+    lowered = message.lower()
+    if "sk-" in message or "api_key" in lowered or "apikey" in lowered:
+        return "分析または資料取得の接続設定を確認してください。認証情報は画面には表示していません。"
+    if "no such file" in lowered or "/workspace/" in message or "\\" in message:
+        return "取得済みファイルを参照できませんでした。資料取得を再実行し、保存先設定を確認してください。"
+    if "pdfファイルサイズが上限" in message:
+        return message + " IR_FETCH_MAX_FILE_MBを調整するか、対象資料を確認してください。"
+    if "htmlページ内のpdf候補数0件" in message:
+        return "資料PDFを取得できませんでした。対象URLがPDF直リンクではない、またはページ内にPDFリンクが見つからない可能性があります。資料URLを確認してください。"
+    if "選択urlがpdfではありません" in message.lower():
+        return "資料PDFを取得できませんでした。対象URLがPDF直リンクではない可能性があります。資料URLを確認してください。"
+    if "fetch failed" in lowered or "urlopen" in lowered or "timed out" in lowered or "http error" in lowered:
+        return "資料PDFを取得できませんでした。対象URL、ネットワーク接続、または公開サイト側の応答状況を確認してください。"
+    if "docid" in lowered and ("見つ" in message or "なし" in message):
+        return "EDINETで対象書類を特定できませんでした。EDINETコード、検索期間、書類種別を確認してください。"
+    return message
+
+
 def run_response(run: DocumentFetchRun | AnalysisRun) -> dict[str, object]:
     return {
         "run_id": run.id,
@@ -104,7 +125,7 @@ def run_response(run: DocumentFetchRun | AnalysisRun) -> dict[str, object]:
         "status": run.status,
         "started_at": run.started_at.isoformat(),
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-        "error_message": run.error_message,
+        "error_message": sanitize_user_message(run.error_message),
         "target_url": run.target_url,
         "saved_path": run.saved_path,
         "input_summary": run.input_summary,
@@ -120,10 +141,10 @@ def latest_run_summary(company_id: int, db: Session) -> dict[str, object]:
     return {
         "latest_fetch_at": fetch_run.completed_at.isoformat() if fetch_run and fetch_run.completed_at else None,
         "latest_fetch_status": fetch_run.status if fetch_run else None,
-        "latest_fetch_error": fetch_run.error_message if fetch_run else None,
+        "latest_fetch_error": sanitize_user_message(fetch_run.error_message) if fetch_run else None,
         "latest_analysis_at": analysis_run.completed_at.isoformat() if analysis_run and analysis_run.completed_at else None,
         "latest_analysis_status": analysis_run.status if analysis_run else None,
-        "latest_analysis_error": analysis_run.error_message if analysis_run else None,
+        "latest_analysis_error": sanitize_user_message(analysis_run.error_message) if analysis_run else None,
     }
 
 

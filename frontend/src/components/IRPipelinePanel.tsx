@@ -10,13 +10,21 @@ function formatDateTime(value?: string | null): string {
 }
 
 function analysisInputLabel(value?: string | null): string {
-  const labels: Record<string, string> = { extracted_pdf_text: 'PDF抽出テキストに基づく分析', existing_db_text: '既存DBテキストに基づく分析', mock_seed_text: 'サンプル/シードテキストに基づく分析' };
-  return value ? labels[value] ?? value : '未実行';
+  const labels: Record<string, string> = {
+    extracted_pdf_text: '取得済みPDFの抽出テキスト',
+    existing_db_text: '保存済みIR本文',
+    mock_seed_text: '登録済みサンプル本文'
+  };
+  return value ? labels[value] ?? '分析対象テキスト' : '未実行';
+}
+
+function analysisModeLabel(value?: string | null): string {
+  return value === 'openai' ? 'AI分析' : 'ルールベース分析';
 }
 
 function statusLabel(value?: string | null): string {
   if (!value) return '未実行';
-  const labels: Record<string, string> = { success: '成功', failed: '失敗', skipped: 'スキップ', dry_run: 'dry-run', extract_failed: '取得成功・抽出失敗' };
+  const labels: Record<string, string> = { success: '完了', failed: '要確認', skipped: '見送り', dry_run: '事前確認', extract_failed: '取得済み・本文抽出要確認' };
   return labels[value] ?? value;
 }
 
@@ -66,34 +74,38 @@ export function IRPipelinePanel({ companyId, initialStatus, onRefresh }: Props) 
   }
 
   const config = status?.config;
-  const disabledMessage = !config?.fetch_enabled ? '外部取得は無効です（IR_FETCH_ENABLED=false）。既存public_demoデータで表示します。' : config.dry_run ? 'dry-runです。外部API・外部URLには接続せず実行予定のみ返します。' : '外部取得が有効です。公開IR URLとEDINETのみを対象にします。';
+  const disabledMessage = !config?.fetch_enabled
+    ? '資料取得は停止中です。登録済みの公開IR情報で確認できます。'
+    : config.dry_run
+      ? '資料取得は事前確認設定です。外部接続前の操作確認として利用できます。'
+      : '公開IR資料とEDINETを対象に資料取得を実行できます。';
 
   return (
     <div className="panel ir-pipeline-panel">
       <div className="section-heading">
         <div>
-          <p className="section-kicker">IR資料取得・分析</p>
-          <h3>操作パネル</h3>
+          <p className="section-kicker">資料取得・分析実行</p>
+          <h3>次に行う操作</h3>
         </div>
         <span className={`pill ir-mode ir-mode--${config?.dry_run ? 'dry' : config?.fetch_enabled ? 'enabled' : 'disabled'}`}>{disabledMessage}</span>
       </div>
       <div className="ir-status-grid">
-        <div><span>EDINET APIキー</span><strong>{config?.edinet_api_key_configured ? '設定済み' : '未設定'}</strong></div>
-        <div><span>OpenAI APIキー</span><strong>{config?.openai_api_key_configured ? '設定済み' : '未設定'}</strong></div>
-        <div><span>分析モード</span><strong>{config?.effective_analysis_mode ?? 'mock'}</strong></div>
+        <div><span>EDINET接続</span><strong>{config?.edinet_api_key_configured ? '利用可能' : '未接続'}</strong></div>
+        <div><span>AI分析接続</span><strong>{config?.openai_api_key_configured ? '利用可能' : '未接続'}</strong></div>
+        <div><span>分析方式</span><strong>{analysisModeLabel(config?.effective_analysis_mode)}</strong></div>
         <div><span>EDINET検索期間</span><strong>過去{config?.edinet_lookback_days ?? 365}日</strong></div>
         <div><span>最新取得</span><strong>{formatDateTime(status?.latest_fetch_at)}</strong><em>{statusLabel(status?.latest_fetch_status)}</em></div>
         <div><span>最新分析</span><strong>{formatDateTime(status?.latest_analysis_at)}</strong><em>{statusLabel(status?.latest_analysis_status)}</em></div>
       </div>
       <div className="ir-actions">
-        <button type="button" onClick={() => runAction('manual')} disabled={Boolean(running)}>{running === 'manual' ? '取得中...' : '資料取得'}</button>
-        <button type="button" onClick={() => runAction('analyze')} disabled={Boolean(running)}>{running === 'analyze' ? '分析中...' : '分析実行'}</button>
+        <button type="button" onClick={() => runAction('manual')} disabled={Boolean(running)}>{running === 'manual' ? '資料を取得しています...' : '4. 資料取得を実行'}</button>
+        <button type="button" onClick={() => runAction('analyze')} disabled={Boolean(running)}>{running === 'analyze' ? '分析しています...' : '5. 分析実行'}</button>
       </div>
       {(status?.latest_fetch_error || status?.latest_analysis_error || lastResponse) ? (
         <div className="ir-result-box">
-          {status?.latest_fetch_error ? <p><strong>取得エラー:</strong> {status.latest_fetch_error}</p> : null}
-          {status?.latest_analysis_error ? <p><strong>分析メッセージ:</strong> {status.latest_analysis_error}</p> : null}
-          {lastResponse ? <p><strong>直近実行:</strong> {statusLabel(lastResponse.status)} / {lastResponse.created_signal_count !== undefined ? `生成シグナル ${lastResponse.created_signal_count}件` : 'レスポンス取得済み'}</p> : null}
+          {status?.latest_fetch_error ? <p><strong>資料取得の確認事項:</strong> {status.latest_fetch_error}</p> : null}
+          {status?.latest_analysis_error ? <p><strong>分析実行の確認事項:</strong> {status.latest_analysis_error}</p> : null}
+          {lastResponse ? <p><strong>直近実行:</strong> {statusLabel(lastResponse.status)} / {lastResponse.created_signal_count !== undefined ? `抽出シグナル ${lastResponse.created_signal_count}件` : '結果を更新しました'}</p> : null}
           {lastResponse?.analysis_input_source ? <p><strong>分析対象:</strong> {analysisInputLabel(lastResponse.analysis_input_source)}</p> : null}
         </div>
       ) : null}

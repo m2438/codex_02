@@ -125,7 +125,7 @@ def test_pdf_size_limit_message_uses_configured_value_from_content_length(monkey
     result = fetcher.fetch_document(company(), document())
 
     assert result.status == "failed"
-    assert result.error_message == "PDFファイルサイズが上限1MBを超えました。"
+    assert result.error_message == "資料PDFのファイルサイズが上限1MBを超えたため取得を中止しました。対象資料を確認するか、IR_FETCH_MAX_FILE_MBの上限設定を見直してください。"
 
 
 def test_pdf_size_limit_message_uses_configured_value_while_streaming(monkeypatch, tmp_path: Path) -> None:
@@ -137,4 +137,4 @@ def test_pdf_size_limit_message_uses_configured_value_while_streaming(monkeypatc
     result = fetcher.fetch_document(company(), document())
 
     assert result.status == "failed"
-    assert result.error_message == "PDFファイルサイズが上限1MBを超えました。"
+    assert result.error_message == "資料PDFのファイルサイズが上限1MBを超えたため取得を中止しました。対象資料を確認するか、IR_FETCH_MAX_FILE_MBの上限設定を見直してください。"

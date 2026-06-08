@@ -17,7 +17,7 @@ PDF_KEYWORDS = ["有価証券報告書", "統合報告書", "annual report", "se
 
 class FileSizeLimitExceededError(Exception):
     def __init__(self, max_file_mb: int) -> None:
-        super().__init__(f"PDFファイルサイズが上限{max_file_mb}MBを超えました。")
+        super().__init__(f"資料PDFのファイルサイズが上限{max_file_mb}MBを超えたため取得を中止しました。対象資料を確認するか、IR_FETCH_MAX_FILE_MBの上限設定を見直してください。")
         self.max_file_mb = max_file_mb
 
 
@@ -75,11 +75,11 @@ class IRDocumentFetcher:
 
     def fetch_document(self, company: Company, document: Document) -> DocumentFetchResult:
         if not self.settings.fetch_enabled:
-            return self._result(company, document, "skipped", error_message="IR_FETCH_ENABLED=false のため外部取得を行いません。")
+            return self._result(company, document, "skipped", error_message="資料取得は現在停止中です。既存の登録済みIR情報で確認するか、IR_FETCH_ENABLEDを有効化してください。")
         if not document.source_url:
-            return self._result(company, document, "skipped", error_message="source_url が未登録です。")
+            return self._result(company, document, "skipped", error_message="資料URLが未登録です。対象企業のIR資料URLを登録してから再実行してください。")
         if self.settings.dry_run:
-            msg = f"dry-run: URL={document.source_url} を確認し、HTMLの場合はページ内PDFリンクのみ探索してPDF保存・テキスト抽出を予定しています。"
+            msg = f"事前確認設定のため外部取得は行っていません。対象URLを確認し、本番取得設定でPDF保存・本文抽出を実行してください。"
             return self._result(company, document, "dry_run", error_message=msg, dry_run=True)
         try:
             http_status, content_type, content = self._download(document.source_url, timeout=25)
@@ -91,12 +91,12 @@ class IRDocumentFetcher:
                 candidates = extract_pdf_links(content.decode("utf-8", errors="ignore"), document.source_url)
                 candidate_count = len(candidates)
                 if not candidates:
-                    return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="HTMLページ内のPDF候補数0件のため取得できませんでした。", original_html_url=original_html_url, pdf_candidate_count=0)
+                    return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="資料PDFを取得できませんでした。対象URLがPDF直リンクではない、またはページ内にPDFリンクが見つからない可能性があります。資料URLを確認してください。", original_html_url=original_html_url, pdf_candidate_count=0)
                 selected_pdf_url = choose_pdf_link(candidates, document)
                 http_status, content_type, content = self._download(selected_pdf_url, timeout=30)
 
             if "pdf" not in content_type.lower() and not selected_pdf_url.lower().split("?")[0].endswith(".pdf"):
-                return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="選択URLがPDFではありません。", original_html_url=original_html_url, selected_pdf_url=selected_pdf_url, pdf_candidate_count=candidate_count)
+                return self._result(company, document, "skipped", http_status=http_status, content_type=content_type, file_size_bytes=len(content), error_message="資料PDFを取得できませんでした。対象URLがPDF直リンクではない可能性があります。資料URLを確認してください。", original_html_url=original_html_url, selected_pdf_url=selected_pdf_url, pdf_candidate_count=candidate_count)
             saved_path = self._save(company, document, content)
             fetched_at = datetime.now(UTC)
             return self._result(company, document, "success", http_status=http_status, content_type=content_type, file_size_bytes=len(content), fetched_at=fetched_at.isoformat(), saved_path=str(saved_path), original_html_url=original_html_url, selected_pdf_url=selected_pdf_url, pdf_candidate_count=candidate_count)

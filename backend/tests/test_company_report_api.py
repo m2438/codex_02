@@ -13,7 +13,7 @@ def test_company_report_api_response_format() -> None:
     assert payload["title"]
     assert payload["generation_status"] == "generated"
     assert payload["generated_at"]
-    assert payload["generated_by"] == "phase4a_report_service"
+    assert payload["generated_by"] == "report_service"
     assert payload["signal_count"] >= 1
     assert payload["preview"]
     assert payload["markdown_content"].startswith("# ")

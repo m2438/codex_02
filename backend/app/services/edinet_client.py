@@ -58,14 +58,14 @@ class EdinetClient:
         days = max(1, int(lookback_days or self.settings.edinet_lookback_days or 365))
         start = end - timedelta(days=days - 1)
         if not self.settings.fetch_enabled:
-            return self._result(company, start, end, days, document_type, None, "skipped", "IR_FETCH_ENABLED=false のため外部取得を行いません。")
+            return self._result(company, start, end, days, document_type, None, "skipped", "資料取得は現在停止中です。登録済みIR情報で確認するか、取得設定を有効化してください。")
         if not company.edinet_code:
-            return self._result(company, start, end, days, document_type, None, "skipped", "EDINETコードが未登録のため取得対象外です。")
+            return self._result(company, start, end, days, document_type, None, "skipped", "EDINETコードが未登録のため対象書類を検索できません。企業マスタのEDINETコードを確認してください。")
         if self.settings.dry_run:
-            msg = f"dry-run: EDINETコード={company.edinet_code}、書類種別={document_type}、検索期間={start.isoformat()}〜{end.isoformat()}（lookback_days={days}）で検索予定です。"
+            msg = f"事前確認設定のためEDINETには接続していません。EDINETコード、書類種別、検索期間（lookback_days={days}）を確認し、本番取得設定で再実行してください。"
             return self._result(company, start, end, days, document_type, None, "dry_run", msg, dry_run=True)
         if not self.settings.edinet_api_key:
-            return self._result(company, start, end, days, document_type, None, "failed", "EDINET_API_KEY が未設定または無効です。バックエンド環境変数を確認してください。")
+            return self._result(company, start, end, days, document_type, None, "failed", "EDINET接続設定が未設定です。バックエンド環境変数EDINET_API_KEYを設定してから再実行してください。")
 
         try:
             doc = self._find_latest_document(company.edinet_code, start, end, document_type)
@@ -79,11 +79,11 @@ class EdinetClient:
             saved_path = self._download_document(doc_id, company, end)
             return self._result(company, start, end, days, document_type, doc_id, "success", saved_path=str(saved_path))
         except HTTPError as exc:
-            return self._result(company, start, end, days, document_type, None, "failed", f"EDINET API HTTPエラー: {exc.code} {exc.reason}")
+            return self._result(company, start, end, days, document_type, None, "failed", "EDINETから対象書類を取得できませんでした。接続設定、検索期間、またはEDINET側の応答状況を確認してください。")
         except FileSizeLimitExceededError as exc:
             return self._result(company, start, end, days, document_type, None, "failed", str(exc))
         except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
-            return self._result(company, start, end, days, document_type, None, "failed", f"EDINET取得エラー: {exc}")
+            return self._result(company, start, end, days, document_type, None, "failed", "EDINETから対象書類を取得できませんでした。ネットワーク接続、検索条件、または接続設定を確認してください。")
 
     def _find_latest_document(self, edinet_code: str, search_start: date, search_end: date, document_type: str) -> dict[str, object] | None:
         form_codes = SUPPORTED_DOCUMENT_TYPES.get(document_type, SECURITIES_REPORT_FORM_CODES)

@@ -36,7 +36,7 @@ class DocumentTextExtractor:
             saved_path = self._save_text(company, document, extracted)
             return TextExtractionResult("success", document.id, str(saved_path), len(extracted))
         except Exception as exc:  # PyMuPDF can raise several document-specific exceptions.
-            return TextExtractionResult("failed", document.id, None, 0, str(exc))
+            return TextExtractionResult("failed", document.id, None, 0, "PDF本文を抽出できませんでした。資料が画像PDF、保護付きPDF、または破損ファイルの可能性があります。資料を確認してください。")
 
     def _save_text(self, company: Company, document: Document, text: str) -> Path:
         storage_dir = self.settings.storage_dir / "extracted_text" / company.ticker

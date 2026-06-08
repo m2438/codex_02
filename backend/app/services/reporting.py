@@ -60,7 +60,7 @@ def generate_company_report(
     markdown = "\n".join(markdown_parts)
     structured_report = {
         "title": title,
-        "disclaimer": "本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。",
+        "disclaimer": "公開情報をもとに、初回提案で確認すべきCRE論点を整理したものです。",
         "sections": [{**section, "items": _plain_items(str(section["body"]))} for section in sorted(sections, key=lambda section: int(section["number"]))],
         "score_components": _structured_score_components(score=latest_score, signals=signals, metric=latest_metric),
         "documents": [_document_payload(document) for document in documents],
@@ -72,7 +72,7 @@ def generate_company_report(
         markdown_content=markdown,
         generation_status="generated",
         generated_at=generated_at,
-        generated_by="phase4a_report_service",
+        generated_by="report_service",
         signal_count=len(signals),
         structured_report=structured_report,
     )
@@ -86,7 +86,7 @@ def _executive_summary(*, company: Company, score: Score | None, signals: list[C
     capex_text = format_million_yen_to_oku(metric.capex_amount) if metric else "未登録"
     if company.data_source_type == "public_demo":
         return (
-            f"{company.name}は{company.industry}の{company.market}上場企業であり、本レポートは公開IR資料に基づく営業仮説です。"
+            f"{company.name}は{company.industry}の{company.market}上場企業であり、公開IR資料をもとに初回提案仮説を整理しています。"
             f"売上高は{revenue_text}、直近設備投資額は{capex_text}としてスコアリング入力に正規化しています。"
             f"公開情報から読み取れるCRE関連の確認候補は **{signal_types}** です。"
             f"営業優先度はスコアリングロジックに基づき **{priority}（{total_score}）** と算定されますが、"
@@ -98,7 +98,7 @@ def _executive_summary(*, company: Company, score: Score | None, signals: list[C
         f"売上高は{revenue_text}、直近設備投資額は{capex_text}の設定で、"
         f"検出シグナルは **{signal_types}** です。"
         f"CRE営業優先度は **{priority}（{total_score}）** と判定されます。"
-        "本判定は、根拠文、財務指標、戦略イベント、CRE支援テーマへの適合度を接続したデモ用分析であり、"
+        "本判定は、根拠文、財務指標、戦略イベント、CRE支援テーマへの適合度を接続した分析であり、"
         "実際の営業活動前には公開資料・一次情報・顧客ヒアリングによる追加検証が必要です。"
     )
 
@@ -112,7 +112,7 @@ def _priority_section(*, score: Score | None) -> str:
             f"- 優先度: **{score.priority_label}**",
             f"- 総合スコア: **{score.total_score}点 / 100点**",
             f"- 判定要約: {summary}として、公開IR資料で確認できるCRE関連テーマを初回面談の確認仮説に整理します。",
-            "- 本判定は公開情報に基づく営業仮説であり、正式方針・案件化状況は一次情報とヒアリングで確認します。",
+            "- 本判定は公開情報に基づく営業仮説です。正式方針・案件化状況は、一次情報とヒアリングで確認します。",
         ]
     )
 
@@ -144,7 +144,7 @@ def _score_detail_section(*, score: Score | None, signals: list[CRESignal], metr
         f"- **提案適合度（fit_score）**: {score.fit_score}点  ",
         "  - 評価対象: CRE戦略、PM/CM、拠点ポートフォリオ診断、遊休資産活用、省エネ改修、ワークプレイス改革などへの接続性。",
         "  - 評価観点: 初回面談で根拠資料を示しながら、過度に断定せず確認質問として提示できるテーマか。",
-        "  - 根拠・判断理由: シグナルと財務・投資余力が同時に確認できるテーマは、公開情報ベースの仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
+        "  - 根拠・判断理由: シグナルと財務・投資余力が同時に確認できるテーマは、公開情報に基づく仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
         f"- **合計**: {score.total_score}点 / 100点",
     ]
     return "\n".join(lines)
@@ -231,12 +231,12 @@ def _structured_score_components(*, score: Score | None, signals: list[CRESignal
             "label": "提案適合度",
             "evaluation_target": "CRE戦略、PM/CM、拠点ポートフォリオ診断、遊休資産活用、省エネ改修、ワークプレイス改革などへの接続性",
             "evaluation_viewpoint": "初回面談で根拠資料を示しながら、過度に断定せず確認質問として提示できるテーマか。",
-            "rationale": "シグナルと財務・投資余力が同時に確認できるテーマは、公開情報ベースの仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
+            "rationale": "シグナルと財務・投資余力が同時に確認できるテーマは、公開情報に基づく仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
             "score_text": f"{score.fit_score}/15",
             "details": [
                 "評価対象: CRE戦略、PM/CM、拠点ポートフォリオ診断、遊休資産活用、省エネ改修、ワークプレイス改革などへの接続性。",
                 "評価観点: 初回面談で根拠資料を示しながら、過度に断定せず確認質問として提示できるテーマか。",
-                "根拠・判断理由: シグナルと財務・投資余力が同時に確認できるテーマは、公開情報ベースの仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
+                "根拠・判断理由: シグナルと財務・投資余力が同時に確認できるテーマは、公開情報に基づく仮説として提案入口を設計しやすい一方、正式な方針・案件化状況は追加ヒアリングで確認が必要です。",
             ],
         },
     ]
@@ -259,7 +259,7 @@ def _signals_section(*, signals: list[CRESignal], documents: list[Document]) -> 
             f"根拠文は「{signal.evidence_text}」であり、{confidence_note}シグナルです。"
         )
     lines.append(
-        "- 上記シグナルは単独では断定材料ではありません。公開情報からはCRE需要の可能性が示唆されるにとどまり、"
+        "- 上記シグナルは初回面談で確認する論点です。"
         "拠点ポートフォリオ、投資計画、不動産コスト、BCP、脱炭素対応の実態は追加確認が必要です。"
     )
     return "\n".join(lines)
@@ -359,7 +359,7 @@ def _first_approach(*, score: Score | None, signals: list[CRESignal]) -> str:
             f"- 初回面談では「{top_signal}」を入口テーマとして、経営企画・総務・不動産管掌部門に仮説を提示する。",
             f"- 推奨アクション: {base_action}",
             "- 提案資料では、根拠テキスト、財務・投資余力、想定CREテーマ、確認したい論点を1枚に整理する。",
-            "- 断定的な提案ではなく、『公開情報ベースの仮説』として提示し、現在の検討状況と担当部門を確認する。",
+            "- 断定的な提案ではなく、『公開情報に基づく仮説』として提示し、現在の検討状況と担当部門を確認する。",
         ]
     )
 
@@ -398,15 +398,14 @@ def _evidence_section(*, signals: list[CRESignal], documents: list[Document]) ->
 
 def _caveats_section(*, company: Company) -> str:
     common = [
-        "- 本レポートは営業デモ用であり、投資判断、与信判断、法務判断を目的としたものではありません。",
+        "- 本レポートは営業検討用であり、投資判断、与信判断、法務判断を目的としたものではありません。",
         "- 実際の営業活動前には、最新の有価証券報告書、統合報告書、決算説明資料、顧客ヒアリングで追加検証してください。",
         "- 根拠が不足するシグナルは低信頼として扱い、断定ではなく仮説として提示してください。",
-        "- OpenAI APIモードを利用する場合も、APIキーはバックエンド環境変数でのみ管理し、フロントエンドには露出しません。",
     ]
     if company.data_source_type == "public_demo":
         return "\n".join(
             [
-                "- 本分析は公開情報に基づく営業仮説であり、当該企業の正式なCRE方針や実際の提案機会を断定するものではありません。",
+                "- 公開情報をもとに、初回提案で確認すべきCRE論点を整理したものです。",
                 "- 個別不動産の状況、投資意思決定、担当部門、検討時期は公開資料のみでは確認できないため、一次情報の再確認および個別ヒアリングが必要です。",
                 "- 企業の経営状態や保有不動産に関する記述は、公開資料から確認できる範囲の事実とCRE観点の仮説を分けて扱ってください。",
                 *common,
@@ -414,8 +413,8 @@ def _caveats_section(*, company: Company) -> str:
         )
     return "\n".join(
         [
-            "- 本レポートはデモ用の合成サンプルデータまたは公開情報ベースの文書を前提に生成しています。",
-            "- 企業名、財務数値、シグナルはデモ品質確認用であり、実在企業の開示や営業先情報を示すものではありません。",
+            "- 本レポートは登録済みの参考データまたは公開情報を前提に生成しています。",
+            "- 企業名、財務数値、シグナルは参考データであり、実在企業の開示や営業先情報を示すものではありません。",
             *common,
         ]
     )

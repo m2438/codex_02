@@ -36,7 +36,7 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
     <div className="score-breakdown">
       <div className="score-breakdown__summary">
         <div>
-          <p className="section-kicker">営業優先度スコア</p>
+          <p className="section-kicker">3. 営業優先度スコア</p>
           <p className="score-breakdown__total">{score.total_score}<span>/100</span></p>
         </div>
         <span className={`priority ${priorityClass(score.priority_label)}`}>優先度 {score.priority_label}</span>
