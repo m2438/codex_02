@@ -1,14 +1,21 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from datetime import UTC, datetime
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
-from app.models import CRESignal, Company, FinancialMetric, Report, Score
+from app.models import AnalysisRun, CRESignal, Company, Document, DocumentFetchRun, FinancialMetric, Report, Score
 from app.seed import seed_database
+from app.services.cre_document_analyzer import extract_rule_based, extract_with_openai
+from app.services.document_text_extractor import DocumentTextExtractor
+from app.services.edinet_client import EdinetClient
+from app.services.ir_document_fetcher import IRDocumentFetcher
+from app.services.ir_settings import build_ir_settings
 from app.services.reporting import CompanyReportResult, generate_company_report
 from app.services.scoring import build_component_details
 
@@ -86,6 +93,37 @@ def report_response(report: CompanyReportResult) -> dict[str, object]:
         "structured_report": report.structured_report,
     }
 
+
+def run_response(run: DocumentFetchRun | AnalysisRun) -> dict[str, object]:
+    return {
+        "run_id": run.id,
+        "company_id": run.company_id,
+        "document_id": run.document_id,
+        "run_type": run.run_type,
+        "status": run.status,
+        "started_at": run.started_at.isoformat(),
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "error_message": run.error_message,
+        "target_url": run.target_url,
+        "saved_path": run.saved_path,
+        "input_summary": run.input_summary,
+        "output_summary": run.output_summary,
+        "dry_run": run.dry_run,
+    }
+
+
+def latest_run_summary(company_id: int, db: Session) -> dict[str, object]:
+    fetch_run = db.query(DocumentFetchRun).filter(DocumentFetchRun.company_id == company_id).order_by(DocumentFetchRun.started_at.desc()).first()
+    analysis_run = db.query(AnalysisRun).filter(AnalysisRun.company_id == company_id).order_by(AnalysisRun.started_at.desc()).first()
+    return {
+        "latest_fetch_at": fetch_run.completed_at.isoformat() if fetch_run and fetch_run.completed_at else None,
+        "latest_fetch_status": fetch_run.status if fetch_run else None,
+        "latest_fetch_error": fetch_run.error_message if fetch_run else None,
+        "latest_analysis_at": analysis_run.completed_at.isoformat() if analysis_run and analysis_run.completed_at else None,
+        "latest_analysis_status": analysis_run.status if analysis_run else None,
+        "latest_analysis_error": analysis_run.error_message if analysis_run else None,
+    }
+
 def signal_response(signal: CRESignal) -> dict[str, object]:
     return {
         "signal_id": signal.id,
@@ -144,6 +182,7 @@ def list_companies(db: Session = Depends(get_db)) -> dict[str, object]:
                 "market": company.market,
                 "data_source_type": company.data_source_type,
                 "selection_reason": company.selection_reason,
+                "edinet_code": company.edinet_code,
                 "total_score": score.total_score if score else None,
                 "priority_label": score.priority_label if score else "未評価",
                 "signal_count": len(company.cre_signals),
@@ -185,6 +224,7 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
             "listing_country": company.listing_country,
             "is_public_company": company.is_public_company,
             "selection_reason": company.selection_reason,
+            "edinet_code": company.edinet_code,
         },
         "latest_financial_metrics": None
         if metric is None
@@ -199,6 +239,7 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
         },
         "cre_signals": [signal_response(signal) for signal in sorted(company.cre_signals, key=lambda item: item.id)],
         "score_breakdown": score_response(score),
+        "pipeline_status": {"config": build_ir_settings(settings).public_status(), **latest_run_summary(company_id, db)},
         "documents": [
             {
                 "document_id": document.id,
@@ -213,6 +254,11 @@ def get_company_detail(company_id: int, db: Session = Depends(get_db)) -> dict[s
                 "published_date": document.published_date.isoformat() if document.published_date else None,
                 "fiscal_year": document.fiscal_year,
                 "is_sample": document.is_sample,
+                "fetched_file_path": document.fetched_file_path,
+                "extracted_text_path": document.extracted_text_path,
+                "content_type": document.content_type,
+                "file_size_bytes": document.file_size_bytes,
+                "external_doc_id": document.external_doc_id,
             }
             for document in sorted(company.documents, key=lambda item: item.id)
         ],
@@ -237,6 +283,146 @@ def get_company_score(company_id: int, db: Session = Depends(get_db)) -> dict[st
     if score is None:
         raise HTTPException(status_code=404, detail="Score not found")
     return {"company_id": company_id, **score}
+
+
+@app.get("/api/companies/{company_id}/documents")
+def get_company_documents(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    documents = db.query(Document).filter(Document.company_id == company_id).order_by(Document.id).all()
+    return {"company_id": company_id, "items": [
+        {
+            "document_id": document.id, "document_type": document.document_type, "title": document.title,
+            "source_url": document.source_url, "source_name": document.source_name,
+            "retrieved_at": document.retrieved_at.isoformat() if document.retrieved_at else None,
+            "published_date": document.published_date.isoformat() if document.published_date else None,
+            "fiscal_year": document.fiscal_year, "is_sample": document.is_sample,
+            "fetched_file_path": document.fetched_file_path, "extracted_text_path": document.extracted_text_path,
+            "content_type": document.content_type, "file_size_bytes": document.file_size_bytes,
+            "external_doc_id": document.external_doc_id,
+        } for document in documents], "total": len(documents), "pipeline": build_ir_settings(settings).public_status(), **latest_run_summary(company_id, db)}
+
+
+@app.get("/api/companies/{company_id}/fetch-runs")
+def get_fetch_runs(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    if db.get(Company, company_id) is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    runs = db.query(DocumentFetchRun).filter(DocumentFetchRun.company_id == company_id).order_by(DocumentFetchRun.started_at.desc()).all()
+    return {"company_id": company_id, "items": [run_response(run) for run in runs], "total": len(runs)}
+
+
+@app.get("/api/companies/{company_id}/analysis-runs")
+def get_analysis_runs(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    if db.get(Company, company_id) is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    runs = db.query(AnalysisRun).filter(AnalysisRun.company_id == company_id).order_by(AnalysisRun.started_at.desc()).all()
+    return {"company_id": company_id, "items": [run_response(run) for run in runs], "total": len(runs)}
+
+
+@app.post("/api/companies/{company_id}/documents/fetch")
+def fetch_company_documents(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    company = db.query(Company).options(selectinload(Company.documents)).filter(Company.id == company_id).first()
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    ir_settings = build_ir_settings(settings)
+    fetcher = IRDocumentFetcher(ir_settings)
+    results = []
+    for document in sorted(company.documents, key=lambda item: item.id):
+        started_at = datetime.now(UTC)
+        result = fetcher.fetch_document(company, document)
+        if result.status == "success":
+            document.fetched_file_path = result.saved_path
+            document.content_type = result.content_type
+            document.file_size_bytes = result.file_size_bytes
+            document.retrieved_at = datetime.now(UTC)
+        run = DocumentFetchRun(
+            company_id=company.id, document_id=document.id, run_type="manual_url", status=result.status,
+            started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,
+            target_url=result.target_url, saved_path=result.saved_path,
+            input_summary=f"source_url={result.target_url or '未登録'}",
+            output_summary=f"HTTP={result.http_status} Content-Type={result.content_type} size={result.file_size_bytes}",
+            dry_run=result.dry_run,
+        )
+        db.add(run)
+        results.append(result.as_dict())
+    db.commit()
+    status = "success" if any(item["status"] == "success" for item in results) else ("dry_run" if any(item["status"] == "dry_run" for item in results) else "skipped")
+    return {"company_id": company_id, "status": status, "pipeline": ir_settings.public_status(), "results": results, **latest_run_summary(company_id, db)}
+
+
+@app.post("/api/companies/{company_id}/documents/fetch-edinet")
+def fetch_company_edinet(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    ir_settings = build_ir_settings(settings)
+    started_at = datetime.now(UTC)
+    result = EdinetClient(ir_settings).fetch_latest_securities_report(company)
+    run = DocumentFetchRun(
+        company_id=company.id, document_id=None, run_type="edinet", status=result.status,
+        started_at=started_at, completed_at=datetime.now(UTC), error_message=result.error_message,
+        target_url="EDINET 書類一覧API/書類取得API", saved_path=result.saved_path,
+        input_summary=f"edinet_code={company.edinet_code or '未登録'} document_type={result.document_type} target_date={result.target_date}",
+        output_summary=f"docID={result.doc_id or 'なし'} status={result.status}", dry_run=result.dry_run,
+    )
+    db.add(run)
+    db.commit()
+    return {"company_id": company_id, "status": result.status, "pipeline": ir_settings.public_status(), "result": result.as_dict(), **latest_run_summary(company_id, db)}
+
+
+@app.post("/api/companies/{company_id}/analyze")
+def analyze_company_documents(company_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    company = db.query(Company).options(selectinload(Company.documents)).filter(Company.id == company_id).first()
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    ir_settings = build_ir_settings(settings)
+    created_signals = 0
+    results = []
+    for document in sorted(company.documents, key=lambda item: item.id):
+        started_at = datetime.now(UTC)
+        extraction_summary = "既存DBテキストを分析"
+        if document.fetched_file_path and not document.extracted_text_path:
+            extraction = DocumentTextExtractor(ir_settings).extract_pdf_text(company, document, document.fetched_file_path)
+            extraction_summary = f"PDF抽出 status={extraction.status} chars={extraction.extracted_char_count}"
+            if extraction.status == "success" and extraction.saved_path:
+                document.extracted_text_path = extraction.saved_path
+                try:
+                    document.text_content = open(extraction.saved_path, encoding="utf-8").read()[:200000]
+                except OSError:
+                    pass
+        candidates = extract_rule_based(document)
+        extracted = extract_with_openai(ir_settings, document, candidates)
+        for item in extracted:
+            if not item.evidence_text:
+                continue
+            exists = db.query(CRESignal).filter(
+                CRESignal.company_id == company.id,
+                CRESignal.document_id == document.id,
+                CRESignal.signal_type == item.signal_type,
+                CRESignal.evidence_text == item.evidence_text,
+            ).first()
+            if exists:
+                continue
+            db.add(CRESignal(
+                company_id=company.id, document_id=document.id, signal_type=item.signal_type,
+                title=f"{item.signal_type}の確認候補", description=item.summary, evidence_text=item.evidence_text,
+                source_reference=f"{item.source_document} / {item.source_url or 'URL未登録'}", confidence=item.confidence,
+                confidence_reason="公開IR資料の本文候補から抽出。正式方針や提案機会を断定せず、一次情報確認が必要です。",
+                extracted_by=item.extracted_by,
+            ))
+            created_signals += 1
+        status = "success" if extracted else "skipped"
+        run = AnalysisRun(
+            company_id=company.id, document_id=document.id, run_type=ir_settings.effective_analysis_mode, status=status,
+            started_at=started_at, completed_at=datetime.now(UTC), error_message=None if extracted else "CRE関連キーワード候補が見つかりませんでした。",
+            target_url=document.source_url, saved_path=document.extracted_text_path, input_summary=extraction_summary,
+            output_summary=f"抽出シグナル数={len(extracted)}", dry_run=False,
+        )
+        db.add(run)
+        results.append({"document_id": document.id, "status": status, "signals": [item.as_dict() for item in extracted], "input_summary": extraction_summary})
+    db.commit()
+    return {"company_id": company_id, "status": "success" if created_signals else "skipped", "pipeline": ir_settings.public_status(), "created_signal_count": created_signals, "results": results, **latest_run_summary(company_id, db)}
 
 
 @app.get("/api/companies/{company_id}/report")

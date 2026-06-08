@@ -1,4 +1,4 @@
-import type { CompaniesResponse, CompanyDetailResponse, CompanyReportResponse, HealthResponse } from '@/types/api';
+import type { CompaniesResponse, CompanyDetailResponse, CompanyReportResponse, HealthResponse, PipelineActionResponse } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api';
 
@@ -32,4 +32,27 @@ export async function getCompanyDetail(companyId: number): Promise<CompanyDetail
 
 export async function getCompanyReport(companyId: number): Promise<CompanyReportResponse | null> {
   return fetchJson<CompanyReportResponse>(`/companies/${companyId}/report`);
+}
+
+
+async function postJson<T>(path: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, { method: 'POST' });
+    if (!response.ok) return null;
+    return response.json() as Promise<T>;
+  } catch {
+    return null;
+  }
+}
+
+export async function postDocumentFetch(companyId: number): Promise<PipelineActionResponse | null> {
+  return postJson<PipelineActionResponse>(`/companies/${companyId}/documents/fetch`);
+}
+
+export async function postEdinetFetch(companyId: number): Promise<PipelineActionResponse | null> {
+  return postJson<PipelineActionResponse>(`/companies/${companyId}/documents/fetch-edinet`);
+}
+
+export async function postAnalyze(companyId: number): Promise<PipelineActionResponse | null> {
+  return postJson<PipelineActionResponse>(`/companies/${companyId}/analyze`);
 }

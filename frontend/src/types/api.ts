@@ -41,6 +41,7 @@ export type CompanyProfile = {
   listing_country: string;
   is_public_company: boolean;
   selection_reason: string;
+  edinet_code: string | null;
 };
 
 export type FinancialMetricScales = {
@@ -105,6 +106,11 @@ export type DocumentSummary = {
   published_date: string | null;
   fiscal_year: string;
   is_sample: boolean;
+  fetched_file_path?: string | null;
+  extracted_text_path?: string | null;
+  content_type?: string | null;
+  file_size_bytes?: number | null;
+  external_doc_id?: string | null;
 };
 
 export type CompanyDetailResponse = {
@@ -112,6 +118,7 @@ export type CompanyDetailResponse = {
   latest_financial_metrics: FinancialMetrics | null;
   cre_signals: CRESignal[];
   score_breakdown: ScoreBreakdownResponse | null;
+  pipeline_status?: PipelineStatus;
   documents: DocumentSummary[];
 };
 
@@ -151,4 +158,39 @@ export type CompanyReportResponse = {
   preview: string;
   markdown_content: string;
   structured_report?: StructuredReport;
+};
+
+export type PipelineConfigStatus = {
+  fetch_enabled: boolean;
+  dry_run: boolean;
+  analysis_mode: 'mock' | 'openai' | string;
+  effective_analysis_mode: 'mock' | 'openai' | string;
+  edinet_api_key_configured: boolean;
+  openai_api_key_configured: boolean;
+  storage_dir: string;
+};
+
+export type PipelineStatus = {
+  config: PipelineConfigStatus;
+  latest_fetch_at: string | null;
+  latest_fetch_status: string | null;
+  latest_fetch_error: string | null;
+  latest_analysis_at: string | null;
+  latest_analysis_status: string | null;
+  latest_analysis_error: string | null;
+};
+
+export type PipelineActionResponse = {
+  company_id: number;
+  status: string;
+  pipeline: PipelineConfigStatus;
+  latest_fetch_at?: string | null;
+  latest_fetch_status?: string | null;
+  latest_fetch_error?: string | null;
+  latest_analysis_at?: string | null;
+  latest_analysis_status?: string | null;
+  latest_analysis_error?: string | null;
+  created_signal_count?: number;
+  result?: Record<string, unknown>;
+  results?: Array<Record<string, unknown>>;
 };
