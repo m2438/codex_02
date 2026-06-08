@@ -168,6 +168,7 @@ export type PipelineConfigStatus = {
   edinet_api_key_configured: boolean;
   openai_api_key_configured: boolean;
   storage_dir: string;
+  edinet_lookback_days?: number;
 };
 
 export type PipelineStatus = {
@@ -191,6 +192,7 @@ export type PipelineActionResponse = {
   latest_analysis_status?: string | null;
   latest_analysis_error?: string | null;
   created_signal_count?: number;
+  analysis_input_source?: string | null;
   result?: Record<string, unknown>;
   results?: Array<Record<string, unknown>>;
 };

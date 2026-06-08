@@ -99,6 +99,9 @@ def _ensure_phase4a_columns(db: Session) -> None:
         "file_size_bytes": "INTEGER",
         "external_doc_id": "VARCHAR(80)",
     })
+    add_missing_columns("analysis_runs", {
+        "analysis_input_source": "VARCHAR(40)",
+    })
     db.commit()
 
 def _japanese_document_definitions(seed: PublicCompanySeed) -> list[dict[str, str]]:

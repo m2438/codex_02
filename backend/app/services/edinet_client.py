@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, UTC
+from datetime import date, timedelta
 from pathlib import Path
+import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -13,6 +14,10 @@ from app.services.ir_settings import IRPipelineSettings
 EDINET_LIST_URL = "https://disclosure.edinet-fsa.go.jp/api/v2/documents.json"
 EDINET_DOCUMENT_URL = "https://disclosure.edinet-fsa.go.jp/api/v2/documents/{doc_id}"
 SECURITIES_REPORT_FORM_CODES = {"030000"}
+SUPPORTED_DOCUMENT_TYPES = {
+    "有価証券報告書": SECURITIES_REPORT_FORM_CODES,
+    # Future extension points: 半期報告書, 四半期報告書, 訂正有価証券報告書.
+}
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,9 @@ class EdinetFetchResult:
     company_id: int
     company_name: str
     target_date: str
+    search_start_date: str
+    search_end_date: str
+    lookback_days: int
     document_type: str
     doc_id: str | None
     status: str
@@ -28,67 +36,72 @@ class EdinetFetchResult:
     dry_run: bool = False
 
     def as_dict(self) -> dict[str, object]:
-        return {
-            "company_id": self.company_id,
-            "company_name": self.company_name,
-            "target_date": self.target_date,
-            "document_type": self.document_type,
-            "doc_id": self.doc_id,
-            "status": self.status,
-            "error_message": self.error_message,
-            "saved_path": self.saved_path,
-            "dry_run": self.dry_run,
-        }
+        return self.__dict__.copy()
 
 
 class EdinetClient:
-    """Small EDINET adapter for document list search followed by document download."""
+    """EDINET adapter for lookback-period list search followed by document download."""
 
     def __init__(self, settings: IRPipelineSettings) -> None:
         self.settings = settings
 
-    def fetch_latest_securities_report(self, company: Company, *, target_date: date | None = None) -> EdinetFetchResult:
-        document_type = "有価証券報告書"
-        target = target_date or date.today()
+    def fetch_latest_securities_report(
+        self,
+        company: Company,
+        *,
+        target_date: date | None = None,
+        lookback_days: int | None = None,
+        document_type: str = "有価証券報告書",
+    ) -> EdinetFetchResult:
+        end = target_date or date.today()
+        days = max(1, int(lookback_days or self.settings.edinet_lookback_days or 365))
+        start = end - timedelta(days=days - 1)
         if not self.settings.fetch_enabled:
-            return self._result(company, target, document_type, None, "skipped", "IR_FETCH_ENABLED=false のため外部取得を行いません。")
+            return self._result(company, start, end, days, document_type, None, "skipped", "IR_FETCH_ENABLED=false のため外部取得を行いません。")
         if not company.edinet_code:
-            return self._result(company, target, document_type, None, "skipped", "EDINETコードが未登録のため取得対象外です。")
+            return self._result(company, start, end, days, document_type, None, "skipped", "EDINETコードが未登録のため取得対象外です。")
         if self.settings.dry_run:
-            return self._result(company, target, document_type, None, "dry_run", "dry-run: EDINET書類一覧API検索と書類取得API呼び出しを予定しています。", dry_run=True)
+            msg = f"dry-run: EDINETコード={company.edinet_code}、書類種別={document_type}、検索期間={start.isoformat()}〜{end.isoformat()}（lookback_days={days}）で検索予定です。"
+            return self._result(company, start, end, days, document_type, None, "dry_run", msg, dry_run=True)
         if not self.settings.edinet_api_key:
-            return self._result(company, target, document_type, None, "failed", "EDINET_API_KEY が未設定です。バックエンド環境変数に設定してください。")
+            return self._result(company, start, end, days, document_type, None, "failed", "EDINET_API_KEY が未設定または無効です。バックエンド環境変数を確認してください。")
 
         try:
-            doc = self._find_latest_document(company.edinet_code, target)
+            doc = self._find_latest_document(company.edinet_code, start, end, document_type)
             if doc is None:
-                return self._result(company, target, document_type, None, "skipped", "対象期間に有価証券報告書のdocIDが見つかりませんでした。")
+                msg = (
+                    f"対象期間にdocIDが見つかりませんでした。検索期間={start.isoformat()}〜{end.isoformat()}、"
+                    f"EDINETコード={company.edinet_code}、書類種別={document_type}、検索日数={days}。"
+                )
+                return self._result(company, start, end, days, document_type, None, "skipped", msg)
             doc_id = str(doc["docID"])
-            saved_path = self._download_document(doc_id, company, target)
-            return self._result(company, target, document_type, doc_id, "success", saved_path=str(saved_path))
-        except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
-            return self._result(company, target, document_type, None, "failed", str(exc))
+            saved_path = self._download_document(doc_id, company, end)
+            return self._result(company, start, end, days, document_type, doc_id, "success", saved_path=str(saved_path))
+        except HTTPError as exc:
+            return self._result(company, start, end, days, document_type, None, "failed", f"EDINET API HTTPエラー: {exc.code} {exc.reason}")
+        except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+            return self._result(company, start, end, days, document_type, None, "failed", f"EDINET取得エラー: {exc}")
 
-    def _find_latest_document(self, edinet_code: str, target_date: date) -> dict[str, object] | None:
-        # EDINET list API is date-based. Search backwards to tolerate weekends/holidays and filing date variance.
-        for offset in range(0, 45):
-            search_date = target_date - timedelta(days=offset)
+    def _find_latest_document(self, edinet_code: str, search_start: date, search_end: date, document_type: str) -> dict[str, object] | None:
+        form_codes = SUPPORTED_DOCUMENT_TYPES.get(document_type, SECURITIES_REPORT_FORM_CODES)
+        latest: dict[str, object] | None = None
+        days = (search_end - search_start).days
+        for offset in range(days + 1):
+            search_date = search_end - timedelta(days=offset)
             query = urlencode({"date": search_date.isoformat(), "type": 2, "Subscription-Key": self.settings.edinet_api_key})
             request = Request(f"{EDINET_LIST_URL}?{query}", headers={"User-Agent": "cre-sales-intelligence-demo/0.1"})
             with urlopen(request, timeout=20) as response:  # noqa: S310 - URL is fixed EDINET endpoint.
-                payload = response.read().decode("utf-8")
-            import json
-
-            data = json.loads(payload)
+                data = json.loads(response.read().decode("utf-8"))
             candidates = [
                 item for item in data.get("results", [])
                 if item.get("edinetCode") == edinet_code
-                and item.get("formCode") in SECURITIES_REPORT_FORM_CODES
-                and "有価証券報告書" in str(item.get("docDescription", ""))
+                and item.get("formCode") in form_codes
+                and document_type in str(item.get("docDescription", ""))
             ]
             if candidates:
-                return candidates[0]
-        return None
+                latest = candidates[0]
+                break
+        return latest
 
     def _download_document(self, doc_id: str, company: Company, target_date: date) -> Path:
         storage_dir = self.settings.storage_dir / "edinet" / company.ticker
@@ -97,16 +110,19 @@ class EdinetClient:
         request = Request(f"{EDINET_DOCUMENT_URL.format(doc_id=doc_id)}?{query}", headers={"User-Agent": "cre-sales-intelligence-demo/0.1"})
         with urlopen(request, timeout=30) as response:  # noqa: S310 - URL is fixed EDINET endpoint.
             content = response.read()
-        saved_path = storage_dir / f"{target_date.isoformat()}_{doc_id}.zip"
+        saved_path = storage_dir / f"{target_date.isoformat()}_{doc_id}.pdf"
         saved_path.write_bytes(content)
         return saved_path
 
     @staticmethod
-    def _result(company: Company, target_date: date, document_type: str, doc_id: str | None, status: str, error_message: str | None = None, *, saved_path: str | None = None, dry_run: bool = False) -> EdinetFetchResult:
+    def _result(company: Company, search_start: date, search_end: date, lookback_days: int, document_type: str, doc_id: str | None, status: str, error_message: str | None = None, *, saved_path: str | None = None, dry_run: bool = False) -> EdinetFetchResult:
         return EdinetFetchResult(
             company_id=company.id,
             company_name=company.name,
-            target_date=target_date.isoformat(),
+            target_date=search_end.isoformat(),
+            search_start_date=search_start.isoformat(),
+            search_end_date=search_end.isoformat(),
+            lookback_days=lookback_days,
             document_type=document_type,
             doc_id=doc_id,
             status=status,

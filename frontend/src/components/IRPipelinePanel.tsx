@@ -9,6 +9,11 @@ function formatDateTime(value?: string | null): string {
   return new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo' }).format(new Date(value));
 }
 
+function analysisInputLabel(value?: string | null): string {
+  const labels: Record<string, string> = { extracted_pdf_text: 'PDF抽出テキストに基づく分析', existing_db_text: '既存DBテキストに基づく分析', mock_seed_text: 'サンプル/シードテキストに基づく分析' };
+  return value ? labels[value] ?? value : '未実行';
+}
+
 function statusLabel(value?: string | null): string {
   if (!value) return '未実行';
   const labels: Record<string, string> = { success: '成功', failed: '失敗', skipped: 'スキップ', dry_run: 'dry-run' };
@@ -60,6 +65,7 @@ export function IRPipelinePanel({ companyId, initialStatus }: Props) {
         <div><span>EDINET APIキー</span><strong>{config?.edinet_api_key_configured ? '設定済み' : '未設定'}</strong></div>
         <div><span>OpenAI APIキー</span><strong>{config?.openai_api_key_configured ? '設定済み' : '未設定'}</strong></div>
         <div><span>分析モード</span><strong>{config?.effective_analysis_mode ?? 'mock'}</strong></div>
+        <div><span>EDINET検索期間</span><strong>過去{config?.edinet_lookback_days ?? 365}日</strong></div>
         <div><span>最新取得</span><strong>{formatDateTime(status?.latest_fetch_at)}</strong><em>{statusLabel(status?.latest_fetch_status)}</em></div>
         <div><span>最新分析</span><strong>{formatDateTime(status?.latest_analysis_at)}</strong><em>{statusLabel(status?.latest_analysis_status)}</em></div>
       </div>
@@ -73,6 +79,7 @@ export function IRPipelinePanel({ companyId, initialStatus }: Props) {
           {status?.latest_fetch_error ? <p><strong>取得エラー:</strong> {status.latest_fetch_error}</p> : null}
           {status?.latest_analysis_error ? <p><strong>分析メッセージ:</strong> {status.latest_analysis_error}</p> : null}
           {lastResponse ? <p><strong>直近実行:</strong> {statusLabel(lastResponse.status)} / {lastResponse.created_signal_count !== undefined ? `生成シグナル ${lastResponse.created_signal_count}件` : 'レスポンス取得済み'}</p> : null}
+          {lastResponse?.analysis_input_source ? <p><strong>分析対象:</strong> {analysisInputLabel(lastResponse.analysis_input_source)}</p> : null}
         </div>
       ) : null}
     </div>
